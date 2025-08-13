@@ -1,0 +1,2 @@
+stigmergy_dual_behavior/E5/**/*.csv filter=lfs diff=lfs merge=lfs -text
+stigmergy_dual_behavior/E5/**/*.xlsx filter=lfs diff=lfs merge=lfs -text
