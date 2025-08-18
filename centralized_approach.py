@@ -1,15 +1,18 @@
 import numpy as np
+import os
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.animation import FFMpegWriter
 from dataclasses import dataclass
 from typing import List, Tuple, Set
+
 
 # -----------------------------
 # Parameters
 # -----------------------------
-GRID_SIZE = 100
-N_ROBOTS   = 7
-N_TARGETS  = 20
+GRID_SIZE = 75
+N_ROBOTS   = 8
+N_TARGETS  = 30
 STEPS_PER_FRAME = 1
 INTERVAL_MS     = 80
 RANDOM_SEED     = 7
@@ -21,6 +24,12 @@ LAMBDA_STEP0 = 0.1
 LAMBDA_DECAY = 0.9
 
 rng = np.random.default_rng(RANDOM_SEED)
+# Pick a frame rate (roughly matches your interactive speed)
+FPS = max(1, int(round(1000 / INTERVAL_MS)))   # e.g., INTERVAL_MS=80 -> ~12 fps
+writer = FFMpegWriter(fps=FPS, metadata={"title": "Centralized Swarm", "artist": "you"}, bitrate=1800)
+dir = "output_frames/centralized_approach/"
+os.makedirs(dir, exist_ok=True)
+frame_counter = {"i": 0}
 
 # -----------------------------
 # Utility
@@ -364,6 +373,10 @@ def update(_frame):
         "World — Equal-Area Voronoi Partition (Centralized)\n"
         f"Covered: {covered.sum()} / {W*H} cells, Found targets: {len(found_targets)} / {len(targets)}"
     )
+
+    fname = os.path.join(dir, f"frame_{frame_counter['i']:05d}.png")
+    plt.savefig(fname, dpi=300)
+    frame_counter["i"] += 1
     return (world_img, shared_img, robot_scatter, und_plot, disc_plot) + \
            tuple(sc for sc, _ in remaining_scatters) + \
            tuple(sc for sc, _ in visited_scatters)
@@ -371,5 +384,5 @@ def update(_frame):
 # -----------------------------
 # Run
 # -----------------------------
-anim = FuncAnimation(fig, update, frames=2000, interval=INTERVAL_MS, blit=False)
+anim = FuncAnimation(fig, update, frames=1, interval=INTERVAL_MS, blit=False)
 plt.show()

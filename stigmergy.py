@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ PHER_MIN = 1e-6
 BIAS_ALPHA = 2.5          # avoid pheromone strength
 UNCOVERED_BONUS = 1.4     # (kept) slight bonus for unexplored
 rng = np.random.default_rng(RANDOM_SEED)
+
 
 # -----------------------------
 # Utilities
