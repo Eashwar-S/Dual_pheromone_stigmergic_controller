@@ -114,7 +114,8 @@ W = H = GRID_SIZE
 all_cells = [(x, y) for x in range(W) for y in range(H)]
 spawn_idx = rng.choice(len(all_cells), size=N_ROBOTS, replace=False)
 spawn_positions = [all_cells[i] for i in spawn_idx]
-robots = [Robot(i, x, y, local_covered=np.zeros((H, W), dtype=bool)) for i, (x, y) in enumerate(spawn_positions)]
+# robots = [Robot(i, x, y, local_covered=np.zeros((H, W), dtype=bool)) for i, (x, y) in enumerate(spawn_positions)]
+robots = [Robot(i, 50, 50, local_covered=np.zeros((H, W), dtype=bool)) for i in range(N_ROBOTS)]
 
 # Targets & state
 targets = generate_unique_targets(GRID_SIZE, N_TARGETS)

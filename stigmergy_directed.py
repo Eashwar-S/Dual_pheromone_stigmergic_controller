@@ -8,7 +8,7 @@ from typing import List, Tuple, Set, Optional
 # Parameters
 # =========================================
 GRID_SIZE = 100
-N_ROBOTS   = 6
+N_ROBOTS   = 10
 N_TARGETS  = 30
 RANDOM_SEED = 7
 
