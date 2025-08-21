@@ -2,27 +2,9 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.animation import FFMpegWriter
 from dataclasses import dataclass
 from typing import List, Tuple, Set, Optional
-
-# -----------------------------
-# Parameters
-# -----------------------------
-GRID_SIZE = 100
-N_ROBOTS = 7
-N_TARGETS = 30
-RANDOM_SEED = 7
-
-STEPS_PER_FRAME = 1
-INTERVAL_MS = 70
-
-# Stigmergy / pheromone
-PHER_DEPOSIT = 1.0
-TAU_DECAY = 60.0
-PHER_MIN = 1e-6
-BIAS_ALPHA = 2.5          # avoid pheromone strength
-UNCOVERED_BONUS = 1.4     # (kept) slight bonus for unexplored
-rng = np.random.default_rng(RANDOM_SEED)
 
 
 # -----------------------------
@@ -108,27 +90,6 @@ class Robot:
         self.x, self.y = nx, ny
 
 # -----------------------------
-# World setup
-# -----------------------------
-W = H = GRID_SIZE
-
-# Robots spawn
-all_cells = [(x, y) for x in range(W) for y in range(H)]
-spawn_idx = rng.choice(len(all_cells), size=N_ROBOTS, replace=False)
-spawn_positions = [all_cells[i] for i in spawn_idx]
-# robots = [Robot(i, x, y, local_covered=np.zeros((H, W), dtype=bool)) for i, (x, y) in enumerate(spawn_positions)]
-robots = [Robot(i, 50, 50, local_covered=np.zeros((H, W), dtype=bool)) for i in range(N_ROBOTS)]
-
-# Targets & state
-targets = generate_unique_targets(GRID_SIZE, N_TARGETS)
-found_targets: Set[Tuple[int,int]] = set()
-
-# Global (for visualization only — NOT shared by robots)
-covered_global = np.zeros((H, W), dtype=bool)
-pher = np.zeros((H, W), dtype=float)
-DECAY_FACTOR = np.exp(-1.0 / TAU_DECAY)
-
-# -----------------------------
 # Visualization helpers
 # -----------------------------
 def coverage_to_image(cv: np.ndarray) -> np.ndarray:
@@ -145,55 +106,6 @@ def pheromone_to_rgba(ph: np.ndarray, alpha_scale: float = 0.35) -> np.ndarray:
     rgba[..., 2] = 0.6
     rgba[..., 3] = norm * alpha_scale
     return rgba
-
-# -----------------------------
-# Matplotlib layout
-# -----------------------------
-fig = plt.figure(figsize=(12.5, 6.2))
-gs = fig.add_gridspec(1, 2, width_ratios=[1.25, 1.0], wspace=0.12)
-ax_world = fig.add_subplot(gs[0, 0])
-ax_obs   = fig.add_subplot(gs[0, 1])
-
-world_cov_img = ax_world.imshow(coverage_to_image(covered_global), origin='lower',
-                                extent=[0, W, 0, H], vmin=0.0, vmax=1.0, zorder=0)
-world_pher_img = ax_world.imshow(pheromone_to_rgba(pher), origin='lower',
-                                 extent=[0, W, 0, H], zorder=1)
-
-# Faint grid
-ax_world.set_xticks(np.arange(0, W+1, 10)); ax_world.set_yticks(np.arange(0, H+1, 10))
-ax_world.set_xticks(np.arange(0, W+1, 1), minor=True); ax_world.set_yticks(np.arange(0, H+1, 1), minor=True)
-ax_world.grid(which='major', color='k', alpha=0.15, linewidth=0.5)
-ax_world.grid(which='minor', color='k', alpha=0.05, linewidth=0.2)
-
-robot_scat = ax_world.scatter([r.x + 0.5 for r in robots], [r.y + 0.5 for r in robots],
-                              s=40, marker='o', c='k', zorder=3)
-
-# Targets
-if targets:
-    tx, ty = zip(*targets)
-else:
-    tx, ty = [], []
-ax_world.scatter([x + 0.5 for x in tx], [y + 0.5 for y in ty],
-                 s=20, marker='x', c='r', alpha=0.9, zorder=4)
-
-ax_world.set_title("World — Stigmergy (Local Maps + Random Walk + Pheromone)")
-ax_world.set_xlim(0, W); ax_world.set_ylim(0, H); ax_world.set_aspect('equal', adjustable='box')
-
-# Observer view (not shared by robots)
-obs_pher_img = ax_obs.imshow(pheromone_to_rgba(pher), origin='lower',
-                             extent=[0, W, 0, H], zorder=0)
-und_plot = ax_obs.scatter([x + 0.5 for x in tx], [y + 0.5 for y in ty],
-                          s=18, marker='x', c='r', label='Undiscovered', zorder=2)
-disc_plot = ax_obs.scatter([], [], s=25, marker='o', facecolors='none',
-                           edgecolors='g', linewidths=1.5, label='Discovered', zorder=2)
-
-ax_obs.set_xticks(np.arange(0, W+1, 10)); ax_obs.set_yticks(np.arange(0, H+1, 10))
-ax_obs.set_xticks(np.arange(0, W+1, 1), minor=True); ax_obs.set_yticks(np.arange(0, H+1, 1), minor=True)
-ax_obs.grid(which='major', color='k', alpha=0.15, linewidth=0.5)
-ax_obs.grid(which='minor', color='k', alpha=0.05, linewidth=0.2)
-ax_obs.set_title("Observer — Pheromone Field (Robots don't share maps)")
-ax_obs.set_xlim(0, W); ax_obs.set_ylim(0, H); ax_obs.set_aspect('equal', adjustable='box')
-ax_obs.legend(loc='upper right', fontsize=8, frameon=False)
 
 # -----------------------------
 # Simulation step
@@ -255,10 +167,113 @@ def update(_frame):
         "World — Stigmergy (Local Maps + Random Walk + Pheromone)\n"
         f"Covered (union): {covered_global.sum()} / {W*H}, Found targets: {len(found_targets)} / {len(targets)}"
     )
+
+    fname = os.path.join(dir, f"frame_{frame_counter['i']:05d}.png")
+    plt.savefig(fname, dpi=300)
+    frame_counter["i"] += 1
     return (world_cov_img, world_pher_img, robot_scat, obs_pher_img, und_plot, disc_plot)
 
-# -----------------------------
-# Run
-# -----------------------------
-anim = FuncAnimation(fig, update, frames=200000, interval=INTERVAL_MS, blit=False)
-plt.show()
+if __name__ == "__main__":
+    # -----------------------------
+    # Parameters
+    # -----------------------------
+    GRID_SIZE = 75
+    N_ROBOTS = 8
+    N_TARGETS = 30
+    RANDOM_SEED = 7
+    STEPS_PER_FRAME = 1
+    INTERVAL_MS = 80
+
+    # Stigmergy / pheromone
+    PHER_DEPOSIT = 1.0
+    TAU_DECAY = 60.0
+    PHER_MIN = 1e-6
+    BIAS_ALPHA = 2.5          # avoid pheromone strength
+    UNCOVERED_BONUS = 10.0     # (kept) slight bonus for unexplored
+    rng = np.random.default_rng(RANDOM_SEED)
+
+
+    FPS = max(1, int(round(1000 / INTERVAL_MS)))   # e.g., INTERVAL_MS=80 -> ~12 fps
+    writer = FFMpegWriter(fps=FPS, metadata={"title": "Stigmergy - random walk", "artist": "you"}, bitrate=1800)
+    dir = "output_frames/stigmergy_random_walk/"
+    os.makedirs(dir, exist_ok=True)
+    frame_counter = {"i": 0}
+
+    # -----------------------------
+    # World setup
+    # -----------------------------
+    W = H = GRID_SIZE
+    robot_starting_x = W // 2
+    robot_starting_y = H // 2
+    # Robots spawn  
+    all_cells = [(x, y) for x in range(W) for y in range(H)]
+    spawn_idx = rng.choice(len(all_cells), size=N_ROBOTS, replace=False)
+    spawn_positions = [all_cells[i] for i in spawn_idx]
+    # robots = [Robot(i, x, y, local_covered=np.zeros((H, W), dtype=bool)) for i, (x, y) in enumerate(spawn_positions)]
+    robots = [Robot(i, robot_starting_x, robot_starting_y, local_covered=np.zeros((H, W), dtype=bool)) for i in range(N_ROBOTS)]
+
+    # Targets & state
+    targets = generate_unique_targets(GRID_SIZE, N_TARGETS)
+    found_targets: Set[Tuple[int,int]] = set()
+
+    # Global (for visualization only — NOT shared by robots)
+    covered_global = np.zeros((H, W), dtype=bool)
+    pher = np.zeros((H, W), dtype=float)
+    DECAY_FACTOR = np.exp(-1.0 / TAU_DECAY)
+
+    # -----------------------------
+    # Matplotlib layout
+    # -----------------------------
+    fig = plt.figure(figsize=(12.5, 6.2))
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.25, 1.0], wspace=0.12)
+    ax_world = fig.add_subplot(gs[0, 0])
+    ax_obs   = fig.add_subplot(gs[0, 1])
+
+    world_cov_img = ax_world.imshow(coverage_to_image(covered_global), origin='lower',
+                                    extent=[0, W, 0, H], vmin=0.0, vmax=1.0, zorder=0)
+    world_pher_img = ax_world.imshow(pheromone_to_rgba(pher), origin='lower',
+                                    extent=[0, W, 0, H], zorder=1)
+
+    # Faint grid
+    ax_world.set_xticks(np.arange(0, W+1, 10)); ax_world.set_yticks(np.arange(0, H+1, 10))
+    ax_world.set_xticks(np.arange(0, W+1, 1), minor=True); ax_world.set_yticks(np.arange(0, H+1, 1), minor=True)
+    ax_world.grid(which='major', color='k', alpha=0.15, linewidth=0.5)
+    ax_world.grid(which='minor', color='k', alpha=0.05, linewidth=0.2)
+
+    robot_scat = ax_world.scatter([r.x + 0.5 for r in robots], [r.y + 0.5 for r in robots],
+                                s=40, marker='o', c='k', zorder=3)
+
+    # Targets
+    if targets:
+        tx, ty = zip(*targets)
+    else:
+        tx, ty = [], []
+    ax_world.scatter([x + 0.5 for x in tx], [y + 0.5 for y in ty],
+                    s=20, marker='x', c='r', alpha=0.9, zorder=4)
+
+    ax_world.set_title("World — Stigmergy (Local Maps + Random Walk + Pheromone)")
+    ax_world.set_xlim(0, W); ax_world.set_ylim(0, H); ax_world.set_aspect('equal', adjustable='box')
+
+    # Observer view (not shared by robots)
+    obs_pher_img = ax_obs.imshow(pheromone_to_rgba(pher), origin='lower',
+                                extent=[0, W, 0, H], zorder=0)
+    und_plot = ax_obs.scatter([x + 0.5 for x in tx], [y + 0.5 for y in ty],
+                            s=18, marker='x', c='r', label='Undiscovered', zorder=2)
+    disc_plot = ax_obs.scatter([], [], s=25, marker='o', facecolors='none',
+                            edgecolors='g', linewidths=1.5, label='Discovered', zorder=2)
+
+    ax_obs.set_xticks(np.arange(0, W+1, 10)); ax_obs.set_yticks(np.arange(0, H+1, 10))
+    ax_obs.set_xticks(np.arange(0, W+1, 1), minor=True); ax_obs.set_yticks(np.arange(0, H+1, 1), minor=True)
+    ax_obs.grid(which='major', color='k', alpha=0.15, linewidth=0.5)
+    ax_obs.grid(which='minor', color='k', alpha=0.05, linewidth=0.2)
+    ax_obs.set_title("Observer — Pheromone Field (Robots don't share maps)")
+    ax_obs.set_xlim(0, W); ax_obs.set_ylim(0, H); ax_obs.set_aspect('equal', adjustable='box')
+    ax_obs.legend(loc='upper right', fontsize=8, frameon=False)
+
+    
+
+    # -----------------------------
+    # Run
+    # -----------------------------
+    anim = FuncAnimation(fig, update, frames=200000, interval=INTERVAL_MS, blit=False)
+    plt.show()

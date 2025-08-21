@@ -101,6 +101,26 @@ def manhattan_connect(path: List[Tuple[int,int]], x2: int, y2: int):
         y1 += dy
         path.append((x1, y1))
 
+def manhattan_path(start: Tuple[int, int], end: Tuple[int, int]) -> List[Tuple[int, int]]:
+    """Create a Manhattan path from start to end."""
+    path = [start]
+    x1, y1 = start
+    x2, y2 = end
+    
+    # Move horizontally first
+    dx = 1 if x2 > x1 else -1
+    while x1 != x2:
+        x1 += dx
+        path.append((x1, y1))
+    
+    # Then move vertically
+    dy = 1 if y2 > y1 else -1
+    while y1 != y2:
+        y1 += dy
+        path.append((x1, y1))
+    
+    return path
+
 def sensor_aware_path_for_region(mask: np.ndarray) -> List[Tuple[int,int]]:
     H, W = mask.shape
     path: List[Tuple[int,int]] = []
@@ -272,7 +292,7 @@ if __name__ == "__main__":
     # -----------------------------
     # Parameters
     # -----------------------------
-    GRID_SIZE = 30
+    GRID_SIZE = 75
     N_ROBOTS   = 8
     N_TARGETS  = 30
     STEPS_PER_FRAME = 1
@@ -304,9 +324,9 @@ if __name__ == "__main__":
                                     LAMBDA_STEP0, LAMBDA_DECAY, rng)
     zones = labels.reshape(H, W)
 
-    # Per-robot masks & paths
+    # Per-robot masks & sweeping paths
     masks = [(zones == i) for i in range(N_ROBOTS)]
-    paths: List[List[Tuple[int,int]]] = []
+    sweeping_paths: List[List[Tuple[int,int]]] = []
     for i in range(N_ROBOTS):
         p = sensor_aware_path_for_region(masks[i])
         if not p:
@@ -314,9 +334,26 @@ if __name__ == "__main__":
             x = int(np.clip(round(cx - 0.5), 0, W-1))
             y = int(np.clip(round(cy - 0.5), 0, H-1))
             p = [(x, y)]
-        paths.append(p)
+        sweeping_paths.append(p)
 
-    robots = [Robot(i, paths[i]) for i in range(N_ROBOTS)]
+    # Create full paths: center -> first cell of sweeping path -> sweeping path
+    center_pos = (W // 2, H // 2)
+    full_paths: List[List[Tuple[int,int]]] = []
+    
+    for i in range(N_ROBOTS):
+        sweeping_path = sweeping_paths[i]
+        if sweeping_path:
+            # Create path from center to first position of sweeping path
+            nav_path = manhattan_path(center_pos, sweeping_path[0])
+            # Combine navigation path (excluding the duplicate end point) with sweeping path
+            full_path = nav_path[:-1] + sweeping_path
+        else:
+            # Fallback if no sweeping path
+            full_path = [center_pos]
+        
+        full_paths.append(full_path)
+
+    robots = [Robot(i, full_paths[i]) for i in range(N_ROBOTS)]
 
     covered = np.zeros((H, W), dtype=bool)
     targets = generate_unique_targets(GRID_SIZE, N_TARGETS)
