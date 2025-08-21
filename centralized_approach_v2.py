@@ -5,27 +5,6 @@ from matplotlib.animation import FuncAnimation
 from dataclasses import dataclass
 from typing import List, Tuple, Set, Optional
 
-# =========================
-# Parameters
-# =========================
-GRID_SIZE = 100
-N_ROBOTS   = 10
-N_TARGETS  = 20
-RANDOM_SEED = 7
-
-# User-defined start (clipped to grid)
-START_X, START_Y = 50, 50
-
-STEPS_PER_FRAME = 1
-INTERVAL_MS     = 80
-
-# Balanced Voronoi (capacitated k-means / power diagram) params
-MAX_ITERS_ASSIGN  = 30
-MAX_ITERS_CENTERS = 10
-LAMBDA_STEP0 = 0.1
-LAMBDA_DECAY = 0.9
-
-rng = np.random.default_rng(RANDOM_SEED)
 
 # =========================
 # Utilities
@@ -470,66 +449,6 @@ class Robot:
             self.idx += 1
 
 # =========================
-# Build scenario
-# =========================
-W = H = GRID_SIZE
-START_X = int(np.clip(START_X, 0, W-1))
-START_Y = int(np.clip(START_Y, 0, H-1))
-
-# Points at cell centers
-yy, xx = np.mgrid[0:H, 0:W]
-points = np.column_stack((xx.ravel() + 0.5, yy.ravel() + 0.5))
-
-# Balanced Voronoi partition
-labels, centers = lloyd_balanced(points, N_ROBOTS, MAX_ITERS_CENTERS, MAX_ITERS_ASSIGN, LAMBDA_STEP0, LAMBDA_DECAY, rng)
-zones = labels.reshape(H, W)
-
-# Per-robot region masks; pick corner + side; anchor at nearest in-mask cell to that corner
-masks = [(zones == i) for i in range(N_ROBOTS)]
-anchors: List[Tuple[int,int]] = []
-corner_tags: List[str] = []
-side_tags: List[str] = []
-region_paths: List[List[Tuple[int,int]]] = []
-
-for i in range(N_ROBOTS):
-    mask = masks[i]
-    min_x, max_x, min_y, max_y = get_region_bbox(mask)
-    # corner closest to global start
-    corners = corner_candidates(min_x, max_x, min_y, max_y)
-    corner_tag, (cx, cy) = min(corners.items(), key=lambda kv: abs(kv[1][0]-START_X)+abs(kv[1][1]-START_Y))
-    corner_tags.append(corner_tag)
-
-    # side at that corner
-    side_tag = choose_side_for_corner(mask, corner_tag, (START_X, START_Y))
-    side_tags.append(side_tag)
-
-    # in-region anchor nearest to chosen geometric corner
-    ax_cell, ay_cell = find_anchor_near_point(mask, cx, cy)
-    anchors.append((ax_cell, ay_cell))
-
-    # build continuous sweep aligned with that side
-    rp = build_corner_side_sweep(mask, corner_tag, side_tag, (ax_cell, ay_cell))
-    region_paths.append(rp)
-
-# Build full continuous paths: Start → Transit → Anchor → Sweep
-full_paths: List[List[Tuple[int,int]]] = []
-for i in range(N_ROBOTS):
-    anchor = anchors[i]
-    rp = region_paths[i]
-    transit = manhattan_path(START_X, START_Y, anchor[0], anchor[1])
-    path = [(START_X, START_Y)]
-    path = concat_paths(path, transit)
-    path = concat_paths(path, rp)
-    full_paths.append(path)
-
-robots = [Robot(i, full_paths[i]) for i in range(N_ROBOTS)]
-
-# Shared state (centralized)
-covered = np.zeros((H, W), dtype=bool)
-targets = generate_unique_targets(GRID_SIZE, N_TARGETS)
-found_targets: Set[Tuple[int, int]] = set()
-
-# =========================
 # Visualization
 # =========================
 def coverage_to_image(cv: np.ndarray) -> np.ndarray:
@@ -555,66 +474,6 @@ def draw_voronoi_borders(ax: plt.Axes, zones: np.ndarray, color: str = '#003366'
         for y in range(H-1):
             if zones[y, x] != zones[y+1, x]:
                 ax.plot([x, x+1], [y+1, y+1], color=color, linewidth=lw, alpha=alpha, zorder=3)
-
-fig = plt.figure(figsize=(12.0, 6.4))
-gs = fig.add_gridspec(1, 2, width_ratios=[1.25, 1], wspace=0.12)
-ax_world = fig.add_subplot(gs[0, 0])
-ax_shared = fig.add_subplot(gs[0, 1])
-
-zone_rgba = region_colors(zones, alpha=0.12)
-ax_world.imshow(zone_rgba, origin='lower', extent=[0, W, 0, H])
-world_img = ax_world.imshow(coverage_to_image(covered), origin='lower', extent=[0, W, 0, H], vmin=0, vmax=1)
-draw_voronoi_borders(ax_world, zones, color='#003366', lw=1.2, alpha=0.9)
-
-ax_world.set_title("World — Centralized: Start → Corner+Side Anchor → Side-Aligned Continuous Lawn-mower")
-ax_world.set_xlim(0, W); ax_world.set_ylim(0, H); ax_world.set_aspect('equal', adjustable='box')
-ax_world.set_xticks(np.arange(0, W+1, 10)); ax_world.set_yticks(np.arange(0, H+1, 10))
-ax_world.set_xticks(np.arange(0, W+1, 1), minor=True); ax_world.set_yticks(np.arange(0, H+1, 1), minor=True)
-ax_world.grid(which='major', color='k', alpha=0.15, linewidth=0.5)
-ax_world.grid(which='minor', color='k', alpha=0.05, linewidth=0.2)
-
-# Robots & path overlays
-robot_scatter = ax_world.scatter(
-    [r.pos[0] + 0.5 for r in robots],
-    [r.pos[1] + 0.5 for r in robots],
-    s=40, marker='o', c='k', zorder=4
-)
-
-remaining_scatters, visited_scatters = [], []
-for r in robots:
-    full_pts = np.array([[x + 0.5, y + 0.5] for (x, y) in r.path])
-    rem_sc = ax_world.scatter(full_pts[:, 0], full_pts[:, 1], s=6, marker='s',
-                              facecolors='none', edgecolors='0.35', alpha=0.14, linewidths=0.45, zorder=1)
-    vis_sc = ax_world.scatter([], [], s=10, marker='s',
-                              facecolors='none', edgecolors='0.2', alpha=0.55, linewidths=0.6, zorder=2)
-    remaining_scatters.append((rem_sc, full_pts))
-    visited_scatters.append((vis_sc, []))
-
-# Start & targets
-ax_world.scatter([START_X + 0.5], [START_Y + 0.5], s=60, marker='*', c='gold', edgecolors='k', zorder=5)
-if targets:
-    tx, ty = zip(*targets)
-else:
-    tx, ty = [], []
-ax_world.scatter([x + 0.5 for x in tx], [y + 0.5 for y in ty], s=20, marker='x', c='r', alpha=0.9, zorder=4)
-
-# Shared panel
-ax_shared.imshow(zone_rgba, origin='lower', extent=[0, W, 0, H])
-shared_img = ax_shared.imshow(coverage_to_image(covered), origin='lower', extent=[0, W, 0, H], vmin=0, vmax=1)
-draw_voronoi_borders(ax_shared, zones, color='#003366', lw=1.2, alpha=0.9)
-
-ax_shared.set_title("Shared Map — Global Knowledge")
-ax_shared.set_xlim(0, W); ax_shared.set_ylim(0, H); ax_shared.set_aspect('equal', adjustable='box')
-ax_shared.set_xticks(np.arange(0, W+1, 10)); ax_shared.set_yticks(np.arange(0, H+1, 10))
-ax_shared.set_xticks(np.arange(0, W+1, 1), minor=True); ax_shared.set_yticks(np.arange(0, H+1, 1), minor=True)
-ax_shared.grid(which='major', color='k', alpha=0.15, linewidth=0.5)
-ax_shared.grid(which='minor', color='k', alpha=0.05, linewidth=0.2)
-
-disc_plot = ax_shared.scatter([], [], s=25, marker='o', facecolors='none',
-                              edgecolors='g', linewidths=1.5, label='Discovered')
-und_plot  = ax_shared.scatter([x + 0.5 for x in tx], [y + 0.5 for y in ty],
-                              s=18, marker='x', c='r', label='Undiscovered')
-ax_shared.legend(loc='upper right', fontsize=8, frameon=False)
 
 # =========================
 # Simulation
@@ -671,8 +530,153 @@ def update(_frame):
     )
     return (world_img, shared_img, robot_scatter, und_plot, disc_plot)
 
-# =========================
-# Run
-# =========================
-anim = FuncAnimation(fig, update, frames=200000, interval=INTERVAL_MS, blit=False)
-plt.show()
+
+if __name__ == "__main__":
+    # =========================
+    # Parameters
+    # =========================
+    GRID_SIZE = 100
+    N_ROBOTS   = 10
+    N_TARGETS  = 20
+    RANDOM_SEED = 7
+
+    # User-defined start (clipped to grid)
+    START_X, START_Y = 50, 50
+
+    STEPS_PER_FRAME = 1
+    INTERVAL_MS     = 80
+
+    # Balanced Voronoi (capacitated k-means / power diagram) params
+    MAX_ITERS_ASSIGN  = 30
+    MAX_ITERS_CENTERS = 10
+    LAMBDA_STEP0 = 0.1
+    LAMBDA_DECAY = 0.9
+
+    rng = np.random.default_rng(RANDOM_SEED)
+
+    # =========================
+    # Build scenario
+    # =========================
+    W = H = GRID_SIZE
+    START_X = int(np.clip(START_X, 0, W-1))
+    START_Y = int(np.clip(START_Y, 0, H-1))
+
+    # Points at cell centers
+    yy, xx = np.mgrid[0:H, 0:W]
+    points = np.column_stack((xx.ravel() + 0.5, yy.ravel() + 0.5))
+
+    # Balanced Voronoi partition
+    labels, centers = lloyd_balanced(points, N_ROBOTS, MAX_ITERS_CENTERS, MAX_ITERS_ASSIGN, LAMBDA_STEP0, LAMBDA_DECAY, rng)
+    zones = labels.reshape(H, W)
+
+    # Per-robot region masks; pick corner + side; anchor at nearest in-mask cell to that corner
+    masks = [(zones == i) for i in range(N_ROBOTS)]
+    anchors: List[Tuple[int,int]] = []
+    corner_tags: List[str] = []
+    side_tags: List[str] = []
+    region_paths: List[List[Tuple[int,int]]] = []
+
+    for i in range(N_ROBOTS):
+        mask = masks[i]
+        min_x, max_x, min_y, max_y = get_region_bbox(mask)
+        # corner closest to global start
+        corners = corner_candidates(min_x, max_x, min_y, max_y)
+        corner_tag, (cx, cy) = min(corners.items(), key=lambda kv: abs(kv[1][0]-START_X)+abs(kv[1][1]-START_Y))
+        corner_tags.append(corner_tag)
+
+        # side at that corner
+        side_tag = choose_side_for_corner(mask, corner_tag, (START_X, START_Y))
+        side_tags.append(side_tag)
+
+        # in-region anchor nearest to chosen geometric corner
+        ax_cell, ay_cell = find_anchor_near_point(mask, cx, cy)
+        anchors.append((ax_cell, ay_cell))
+
+        # build continuous sweep aligned with that side
+        rp = build_corner_side_sweep(mask, corner_tag, side_tag, (ax_cell, ay_cell))
+        region_paths.append(rp)
+
+    # Build full continuous paths: Start → Transit → Anchor → Sweep
+    full_paths: List[List[Tuple[int,int]]] = []
+    for i in range(N_ROBOTS):
+        anchor = anchors[i]
+        rp = region_paths[i]
+        transit = manhattan_path(START_X, START_Y, anchor[0], anchor[1])
+        path = [(START_X, START_Y)]
+        path = concat_paths(path, transit)
+        path = concat_paths(path, rp)
+        full_paths.append(path)
+
+    robots = [Robot(i, full_paths[i]) for i in range(N_ROBOTS)]
+
+    # Shared state (centralized)
+    covered = np.zeros((H, W), dtype=bool)
+    targets = generate_unique_targets(GRID_SIZE, N_TARGETS)
+    found_targets: Set[Tuple[int, int]] = set()
+
+
+    fig = plt.figure(figsize=(12.0, 6.4))
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.25, 1], wspace=0.12)
+    ax_world = fig.add_subplot(gs[0, 0])
+    ax_shared = fig.add_subplot(gs[0, 1])
+
+    zone_rgba = region_colors(zones, alpha=0.12)
+    ax_world.imshow(zone_rgba, origin='lower', extent=[0, W, 0, H])
+    world_img = ax_world.imshow(coverage_to_image(covered), origin='lower', extent=[0, W, 0, H], vmin=0, vmax=1)
+    draw_voronoi_borders(ax_world, zones, color='#003366', lw=1.2, alpha=0.9)
+
+    ax_world.set_title("World — Centralized: Start → Corner+Side Anchor → Side-Aligned Continuous Lawn-mower")
+    ax_world.set_xlim(0, W); ax_world.set_ylim(0, H); ax_world.set_aspect('equal', adjustable='box')
+    ax_world.set_xticks(np.arange(0, W+1, 10)); ax_world.set_yticks(np.arange(0, H+1, 10))
+    ax_world.set_xticks(np.arange(0, W+1, 1), minor=True); ax_world.set_yticks(np.arange(0, H+1, 1), minor=True)
+    ax_world.grid(which='major', color='k', alpha=0.15, linewidth=0.5)
+    ax_world.grid(which='minor', color='k', alpha=0.05, linewidth=0.2)
+
+    # Robots & path overlays
+    robot_scatter = ax_world.scatter(
+        [r.pos[0] + 0.5 for r in robots],
+        [r.pos[1] + 0.5 for r in robots],
+        s=40, marker='o', c='k', zorder=4
+    )
+
+    remaining_scatters, visited_scatters = [], []
+    for r in robots:
+        full_pts = np.array([[x + 0.5, y + 0.5] for (x, y) in r.path])
+        rem_sc = ax_world.scatter(full_pts[:, 0], full_pts[:, 1], s=6, marker='s',
+                                facecolors='none', edgecolors='0.35', alpha=0.14, linewidths=0.45, zorder=1)
+        vis_sc = ax_world.scatter([], [], s=10, marker='s',
+                                facecolors='none', edgecolors='0.2', alpha=0.55, linewidths=0.6, zorder=2)
+        remaining_scatters.append((rem_sc, full_pts))
+        visited_scatters.append((vis_sc, []))
+
+    # Start & targets
+    ax_world.scatter([START_X + 0.5], [START_Y + 0.5], s=60, marker='*', c='gold', edgecolors='k', zorder=5)
+    if targets:
+        tx, ty = zip(*targets)
+    else:
+        tx, ty = [], []
+    ax_world.scatter([x + 0.5 for x in tx], [y + 0.5 for y in ty], s=20, marker='x', c='r', alpha=0.9, zorder=4)
+
+    # Shared panel
+    ax_shared.imshow(zone_rgba, origin='lower', extent=[0, W, 0, H])
+    shared_img = ax_shared.imshow(coverage_to_image(covered), origin='lower', extent=[0, W, 0, H], vmin=0, vmax=1)
+    draw_voronoi_borders(ax_shared, zones, color='#003366', lw=1.2, alpha=0.9)
+
+    ax_shared.set_title("Shared Map — Global Knowledge")
+    ax_shared.set_xlim(0, W); ax_shared.set_ylim(0, H); ax_shared.set_aspect('equal', adjustable='box')
+    ax_shared.set_xticks(np.arange(0, W+1, 10)); ax_shared.set_yticks(np.arange(0, H+1, 10))
+    ax_shared.set_xticks(np.arange(0, W+1, 1), minor=True); ax_shared.set_yticks(np.arange(0, H+1, 1), minor=True)
+    ax_shared.grid(which='major', color='k', alpha=0.15, linewidth=0.5)
+    ax_shared.grid(which='minor', color='k', alpha=0.05, linewidth=0.2)
+
+    disc_plot = ax_shared.scatter([], [], s=25, marker='o', facecolors='none',
+                                edgecolors='g', linewidths=1.5, label='Discovered')
+    und_plot  = ax_shared.scatter([x + 0.5 for x in tx], [y + 0.5 for y in ty],
+                                s=18, marker='x', c='r', label='Undiscovered')
+    ax_shared.legend(loc='upper right', fontsize=8, frameon=False)
+
+    # =========================
+    # Run
+    # =========================
+    anim = FuncAnimation(fig, update, frames=200000, interval=INTERVAL_MS, blit=False)
+    plt.show()
