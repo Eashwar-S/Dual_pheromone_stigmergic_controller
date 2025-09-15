@@ -5,9 +5,7 @@ from typing import List, Tuple, Set
 
 from simulation import FrameWriter, compute_fps, make_writer, run_animation
 
-# -----------------------------
-# Utility
-# -----------------------------
+
 def generate_unique_targets(grid_size: int, m: int) -> Set[Tuple[int, int]]:
     cells = [(x, y) for x in range(grid_size) for y in range(grid_size)]
     choices = rng.choice(len(cells), size=m, replace=False)
@@ -15,20 +13,15 @@ def generate_unique_targets(grid_size: int, m: int) -> Set[Tuple[int, int]]:
 
 def kpp_init(points: np.ndarray, k: int, rng: np.random.Generator) -> np.ndarray:
     n = points.shape[0]
-    print(f"Initializing {k} centers using k-means++ from {n} points.")
     centers = np.empty((k, 2), dtype=float)
     idx = rng.integers(n)
-    print(f"Randomly selected initial center index: {idx}")
     centers[0] = points[idx]
-    print(f"Initial center: {centers[0]}")
     d2 = np.full(n, np.inf)
-    print(f'Distance array initialized with inf: {d2}')
     for i in range(1, k):
         d2 = np.minimum(d2, np.sum((points - centers[i-1])**2, axis=1))
         probs = d2 / d2.sum()
         idx = rng.choice(n, p=probs)
         centers[i] = points[idx]
-        print(f"Selected center {i}: {centers[i]} with index {idx}")
     return centers
 
 def balanced_power_diagram_assign(points: np.ndarray,
@@ -41,6 +34,7 @@ def balanced_power_diagram_assign(points: np.ndarray,
     k = centers.shape[0]
     lambdas = np.zeros(k, dtype=float)
     labels = np.zeros(points.shape[0], dtype=int)
+    # print(f' points - {points}')
     step = step0
     for _ in range(iters):
         diffs = points[:, None, :] - centers[None, :, :]
@@ -300,7 +294,7 @@ if __name__ == "__main__":
     MAX_ITERS_ASSIGN  = 30
     MAX_ITERS_CENTERS = 10
     LAMBDA_STEP0 = 0.1
-    LAMBDA_DECAY = 0.9
+    LAMBDA_DECAY = 0.1
 
     rng = np.random.default_rng(RANDOM_SEED)
     # Pick a frame rate (roughly matches your interactive speed)
