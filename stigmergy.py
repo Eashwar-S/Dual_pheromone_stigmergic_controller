@@ -1,10 +1,9 @@
 import numpy as np
-import os
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-from matplotlib.animation import FFMpegWriter
 from dataclasses import dataclass
 from typing import List, Tuple, Set, Optional
+
+from simulation import FrameWriter, compute_fps, make_writer, run_animation
 
 
 # -----------------------------
@@ -168,16 +167,14 @@ def update(_frame):
         f"Covered (union): {covered_global.sum()} / {W*H}, Found targets: {len(found_targets)} / {len(targets)}"
     )
 
-    fname = os.path.join(dir, f"frame_{frame_counter['i']:05d}.png")
-    plt.savefig(fname, dpi=300)
-    frame_counter["i"] += 1
+    frame_writer.save(fig)
     return (world_cov_img, world_pher_img, robot_scat, obs_pher_img, und_plot, disc_plot)
 
 if __name__ == "__main__":
     # -----------------------------
     # Parameters
     # -----------------------------
-    GRID_SIZE = 75
+    GRID_SIZE = 25
     N_ROBOTS = 8
     N_TARGETS = 30
     RANDOM_SEED = 7
@@ -193,11 +190,10 @@ if __name__ == "__main__":
     rng = np.random.default_rng(RANDOM_SEED)
 
 
-    FPS = max(1, int(round(1000 / INTERVAL_MS)))   # e.g., INTERVAL_MS=80 -> ~12 fps
-    writer = FFMpegWriter(fps=FPS, metadata={"title": "Stigmergy - random walk", "artist": "you"}, bitrate=1800)
+    FPS = compute_fps(INTERVAL_MS)
+    writer = make_writer(INTERVAL_MS, title="Stigmergy - random walk", artist="you")
     dir = "output_frames/stigmergy_random_walk/"
-    os.makedirs(dir, exist_ok=True)
-    frame_counter = {"i": 0}
+    frame_writer = FrameWriter(dir)
 
     # -----------------------------
     # World setup
@@ -275,5 +271,5 @@ if __name__ == "__main__":
     # -----------------------------
     # Run
     # -----------------------------
-    anim = FuncAnimation(fig, update, frames=200000, interval=INTERVAL_MS, blit=False)
+    anim = run_animation(fig, update, frames=200000, interval_ms=INTERVAL_MS, blit=False)
     plt.show()
