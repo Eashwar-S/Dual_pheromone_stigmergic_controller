@@ -1,10 +1,9 @@
 import numpy as np
-import os
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation
-from matplotlib.animation import FFMpegWriter
 from dataclasses import dataclass
 from typing import List, Tuple, Set
+
+from simulation import FrameWriter, compute_fps, make_writer, run_animation
 
 # -----------------------------
 # Utility
@@ -279,9 +278,7 @@ def update(_frame):
         f"Covered: {covered.sum()} / {W*H} cells, Found targets: {len(found_targets)} / {len(targets)}"
     )
 
-    fname = os.path.join(dir, f"frame_{frame_counter['i']:05d}.png")
-    plt.savefig(fname, dpi=300)
-    frame_counter["i"] += 1
+    frame_writer.save(fig)
     return (world_img, shared_img, robot_scatter, und_plot, disc_plot) + \
            tuple(sc for sc, _ in remaining_scatters) + \
            tuple(sc for sc, _ in visited_scatters)
@@ -307,11 +304,10 @@ if __name__ == "__main__":
 
     rng = np.random.default_rng(RANDOM_SEED)
     # Pick a frame rate (roughly matches your interactive speed)
-    FPS = max(1, int(round(1000 / INTERVAL_MS)))   # e.g., INTERVAL_MS=80 -> ~12 fps
-    writer = FFMpegWriter(fps=FPS, metadata={"title": "Centralized Swarm", "artist": "you"}, bitrate=1800)
+    FPS = compute_fps(INTERVAL_MS)
+    writer = make_writer(INTERVAL_MS, title="Centralized Swarm", artist="you")
     dir = "output_frames/centralized_approach/"
-    os.makedirs(dir, exist_ok=True)
-    frame_counter = {"i": 0}
+    frame_writer = FrameWriter(dir)
 
     # -----------------------------
     # Build scenario
@@ -431,5 +427,5 @@ if __name__ == "__main__":
     # Run
     # -----------------------------
 
-    anim = FuncAnimation(fig, update, frames=2000000, interval=INTERVAL_MS, blit=False)
+    anim = run_animation(fig, update, frames=2000000, interval_ms=INTERVAL_MS, blit=False)
     plt.show()
