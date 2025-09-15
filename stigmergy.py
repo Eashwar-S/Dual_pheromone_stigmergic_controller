@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
 from typing import List, Tuple, Set, Optional
-
+from pathlib import Path
 from simulation import FrameWriter, compute_fps, make_writer, run_animation
 
 
@@ -46,44 +46,39 @@ class Robot:
     y: int
     local_covered: np.ndarray  # (H,W) bool, private per-robot map
     last_move: Optional[Tuple[int,int]] = None
+    failed: bool = False  # <-- NEW
 
     def choose_move(self, pher: np.ndarray) -> Tuple[int,int]:
-        """Biased random step among VN neighbors (no 'stay').
-        Primary bias: prefer cells this robot has NOT covered on its own map (local_covered=False).
-        Secondary bias: avoid higher pheromone.
-        """
+        """Biased random step among VN neighbors (no 'stay')."""
         H, W = pher.shape
         candidates: List[Tuple[int,int]] = []
         if self.y-1 >= 0: candidates.append((self.x, self.y-1))
         if self.y+1 < H:  candidates.append((self.x, self.y+1))
         if self.x-1 >= 0: candidates.append((self.x-1, self.y))
         if self.x+1 < W:  candidates.append((self.x+1, self.y))
-
         if not candidates:
             return (self.x, self.y)
 
-        # Partition candidates into local-uncovered vs local-covered (NEW)
+        # Prefer locally-uncovered, avoid pheromone
         uncov = [(nx, ny) for (nx, ny) in candidates if not self.local_covered[ny, nx]]
-        pool = uncov if len(uncov) > 0 else candidates  # prefer unexplored; fallback if none
-
-        # Build pheromone-avoidance weights, with optional slight bonus for globally uncovered effect removed
+        pool = uncov if len(uncov) > 0 else candidates
         weights = []
         for (nx, ny) in pool:
             p = max(pher[ny, nx], 0.0)
             desirability = np.exp(-BIAS_ALPHA * (p / (1.0 + p)))
-            # keep a small bias toward cells this robot hasn't covered (if we’re in fallback pool==candidates, some may be covered)
             if not self.local_covered[ny, nx]:
                 desirability *= UNCOVERED_BONUS
             weights.append(desirability)
-
         w = np.array(weights, dtype=float)
-        if np.all(w <= 0):  # numerical fallback
+        if np.all(w <= 0):
             w = np.ones_like(w)
         probs = w / w.sum()
         idx = rng.choice(len(pool), p=probs)
         return pool[idx]
 
     def step(self, pher: np.ndarray):
+        if self.failed:
+            return  # <-- NEW: freeze in place once failed
         nx, ny = self.choose_move(pher)
         self.last_move = (nx - self.x, ny - self.y)
         self.x, self.y = nx, ny
@@ -109,24 +104,49 @@ def pheromone_to_rgba(ph: np.ndarray, alpha_scale: float = 0.35) -> np.ndarray:
 # -----------------------------
 # Simulation step
 # -----------------------------
+
+def _maybe_trigger_failure():
+    """Freeze the chosen robot exactly at FAIL_AT_STEP."""
+    global failure_triggered
+    if failure_triggered or FAIL_ROBOT_ID is None or FAIL_AT_STEP is None:
+        return
+    if global_step == FAIL_AT_STEP:
+        robots[FAIL_ROBOT_ID].failed = True
+        failure_triggered = True
+
+def save_targets_over_time_plot(path: Path):
+    """Save dotted line plot: time step vs total targets detected (cumulative)."""
+    import matplotlib.pyplot as plt
+    xs = np.arange(len(targets_found_over_time))
+    ys = np.asarray(targets_found_over_time, dtype=float)
+    fig, ax = plt.subplots(figsize=(6, 3.5))
+    ax.plot(xs, ys, linestyle=':', linewidth=2)  # dotted
+    ax.set_xlabel("Time step")
+    ax.set_ylabel("Total targets detected")
+    ax.set_title("Targets detected over time")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
 def sim_step():
-    global pher
+    global pher, global_step
+
+    # NEW: trigger a failure exactly at the configured step
+    _maybe_trigger_failure()
 
     # Evaporate pheromone
-    pher *= np.exp(-1.0 / TAU_DECAY)
+    pher *= 1#np.exp(-1.0 / TAU_DECAY)
     pher[pher < PHER_MIN] = 0.0
 
     # Sense/cover/discover; deposit; advance
     for r in robots:
-        # Mark on robot's **private** map (NEW) and global viz
         mark_visible_bool(r.local_covered, r.x, r.y)  # private
         mark_visible_bool(covered_global, r.x, r.y)   # visualization union
         discover_vn(r.x, r.y, targets, found_targets, W, H)
-
-        # Deposit at current cell
         pher[r.y, r.x] += PHER_DEPOSIT
 
-    # Move robots using their local maps (NEW)
+    # Move robots (failed ones won't move because Robot.step guards it)
     for r in robots:
         r.step(pher)
 
@@ -136,6 +156,14 @@ def sim_step():
         mark_visible_bool(covered_global, r.x, r.y)
         discover_vn(r.x, r.y, targets, found_targets, W, H)
         pher[r.y, r.x] += 0.3 * PHER_DEPOSIT
+
+    # NEW: time bookkeeping + cumulative target logging
+    global_step += 1
+    targets_found_over_time.append(len(found_targets))
+
+
+def _all_targets_found() -> bool:
+    return len(found_targets) >= len(targets)
 
 # -----------------------------
 # Animation update
@@ -148,6 +176,15 @@ def update(_frame):
     world_pher_img.set_data(pheromone_to_rgba(pher))
     robot_scat.set_offsets(np.array([[r.x + 0.5, r.y + 0.5] for r in robots]))
     obs_pher_img.set_data(pheromone_to_rgba(pher))
+
+    # NEW: failed robots in red + label suffix
+    colors = ['red' if r.failed else 'k' for r in robots]
+    robot_scat.set_facecolors(colors)
+    robot_scat.set_edgecolors(colors)
+    for i, r in enumerate(robots):
+        robot_labels[i].set_position((r.x + 0.6, r.y + 0.6))
+        robot_labels[i].set_text(f"R{r.id}" + (" (failed)" if r.failed else ""))
+        robot_labels[i].set_color('red' if r.failed else 'k')
 
     discovered = list(found_targets)
     undiscovered = list(targets - found_targets)
@@ -167,8 +204,25 @@ def update(_frame):
         f"Covered (union): {covered_global.sum()} / {W*H}, Found targets: {len(found_targets)} / {len(targets)}"
     )
 
+    # NEW: save dotted targets-over-time plot once, when all targets are found
+    global plot_saved
+    if (not plot_saved) and _all_targets_found():
+        try:
+            out_dir = OUTPUT_DIR
+        except NameError:
+            out_dir = Path("out")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        save_targets_over_time_plot(out_dir / "targets_over_time_stigmergy.png")
+        
+        if FAIL_ROBOT_ID is not None:
+            np.save('output_metrics/stigmergy_with_failure.npy', np.array(targets_found_over_time))
+        else:
+            np.save('output_metrics/stigmergy_without_failure.npy', np.array(targets_found_over_time))
+        
+        plot_saved = True
+
     frame_writer.save(fig)
-    return (world_cov_img, world_pher_img, robot_scat, obs_pher_img, und_plot, disc_plot)
+    return (world_cov_img, world_pher_img, robot_scat, obs_pher_img, und_plot, disc_plot, *robot_labels)
 
 if __name__ == "__main__":
     # -----------------------------
@@ -181,11 +235,22 @@ if __name__ == "__main__":
     STEPS_PER_FRAME = 1
     INTERVAL_MS = 80
 
+    # for metric - number of targets detected over time steps
+    targets_found_over_time = []   # cumulative #found after each sim_step
+    plot_saved = False             # guard so we only write once
+    OUTPUT_DIR = Path("output_frames/stigmergy_random_walk/")
+
+    # Failure scenario (NEW)
+    FAIL_ROBOT_ID = 1   # e.g., 2
+    FAIL_AT_STEP  = 10   # e.g., 800
+    global_step = 0
+    failure_triggered = False
+
     # Stigmergy / pheromone
     PHER_DEPOSIT = 1.0
     TAU_DECAY = 60.0
     PHER_MIN = 1e-6
-    BIAS_ALPHA = 2.5          # avoid pheromone strength
+    BIAS_ALPHA = 250          # avoid pheromone strength
     UNCOVERED_BONUS = 10.0     # (kept) slight bonus for unexplored
     rng = np.random.default_rng(RANDOM_SEED)
 
@@ -236,8 +301,17 @@ if __name__ == "__main__":
     ax_world.grid(which='major', color='k', alpha=0.15, linewidth=0.5)
     ax_world.grid(which='minor', color='k', alpha=0.05, linewidth=0.2)
 
-    robot_scat = ax_world.scatter([r.x + 0.5 for r in robots], [r.y + 0.5 for r in robots],
-                                s=40, marker='o', c='k', zorder=3)
+    robot_colors = ['k' for _ in robots]  # black initially
+    robot_scat = ax_world.scatter([r.x + 0.5 for r in robots],
+                                [r.y + 0.5 for r in robots],
+                                s=40, marker='o', c=robot_colors, zorder=3)
+
+    # NEW: text labels above robots
+    robot_labels = []
+    for r in robots:
+        t = ax_world.text(r.x + 0.6, r.y + 0.6, f"R{r.id}",
+                        fontsize=7, color='k', zorder=5)
+        robot_labels.append(t)
 
     # Targets
     if targets:

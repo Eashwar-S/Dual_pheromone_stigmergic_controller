@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
 from typing import List, Tuple, Set
+from pathlib import Path
 
 from simulation import FrameWriter, compute_fps, make_writer, run_animation
 
@@ -194,12 +195,16 @@ class Robot:
     id: int
     path: List[Tuple[int, int]]
     idx: int = 0
+    failed: bool = False  # <-- NEW
 
     @property
     def pos(self) -> Tuple[int, int]:
         return self.path[self.idx]
 
     def step(self):
+        # If failed, it stays frozen in place.
+        if self.failed:
+            return
         if self.idx < len(self.path) - 1:
             self.idx += 1
 
@@ -213,14 +218,108 @@ def discover_targets_in_vnhood(x: int, y: int, targets: Set[Tuple[int,int]], fou
         if (nx, ny) in targets:
             found.add((nx, ny))
 
+
+def _maybe_trigger_failure():
+    """Trigger the failure event exactly at FAIL_AT_STEP by freezing the robot."""
+    global failure_triggered
+    if failure_triggered:
+        return
+    if FAIL_ROBOT_ID is None or FAIL_AT_STEP is None:
+        return
+    if global_step == FAIL_AT_STEP:
+        r = robots[FAIL_ROBOT_ID]
+        r.failed = True
+        failure_triggered = True
+
+def _first_finisher_after_failure():
+    """
+    Return the first (non-failed) robot that has finished its own area (idx at end)
+    after the failure happened. If multiple are already finished, the first in list wins.
+    """
+    if not failure_triggered:
+        return None
+    for r in robots:
+        if r.id == FAIL_ROBOT_ID:
+            continue
+        if not r.failed and r.idx >= len(r.path) - 1:
+            return r
+    return None
+
+def _extend_full_pts_for_robot(robot_id: int, extra_path: List[Tuple[int,int]]):
+    """
+    Update the 'remaining_scatters' full point cache so the animation overlays
+    reflect the extended path.
+    """
+    rem_sc, full_pts = remaining_scatters[robot_id]
+    if len(extra_path):
+        add_pts = np.array([[x + 0.5, y + 0.5] for (x, y) in extra_path])
+        full_pts = np.vstack([full_pts, add_pts])
+        remaining_scatters[robot_id] = (rem_sc, full_pts)
+
+def _maybe_reallocate_failed_path():
+    """Once a robot finishes after the failure, give it the failed robot's remaining path."""
+    global failure_reallocated
+
+    if not failure_triggered or failure_reallocated:
+        return
+
+    takeover = _first_finisher_after_failure()
+    if takeover is None:
+        return
+
+    failed = robots[FAIL_ROBOT_ID]
+
+    # Build extension: from takeover's current (finished) pos to failed's frozen pos,
+    # then append the failed robot's remaining path.
+    nav = manhattan_path(takeover.pos, failed.pos)          # [start,..., failed.pos]
+    rem = failed.path[failed.idx:]                          # [failed.pos, ...]
+
+    # Avoid duplicates at the seam
+    extension = nav[1:]  # skip takeover.pos
+    if len(rem) > 1:
+        extension += rem[1:]  # skip failed.pos (already included by nav)
+
+    # Append to takeover path and update overlays
+    takeover.path.extend(extension)
+    _extend_full_pts_for_robot(takeover.id, extension)
+
+    # Trim failed robot path to what it actually completed (freeze at current idx)
+    failed.path = failed.path[:failed.idx + 1]
+    _extend_full_pts_for_robot(failed.id, [])  # keep overlays consistent even if no extra
+
+    failure_reallocated = True
+
+def save_targets_over_time_plot(path: Path):
+    """
+    Save a dotted line plot: time step (x) vs total targets detected (y, cumulative).
+    """
+    xs = np.arange(len(targets_found_over_time))
+    ys = np.asarray(targets_found_over_time, dtype=float)
+
+    fig, ax = plt.subplots(figsize=(6, 3.5))
+    ax.plot(xs, ys, linestyle=':', linewidth=2)  # dotted line
+    ax.set_xlabel("Time step")
+    ax.set_ylabel("Total targets detected")
+    ax.set_title("Targets detected over time")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+
 def sim_step():
+    global global_step
+
+    # Check failure BEFORE any robot moves this step, so the failed one won't move.
+    _maybe_trigger_failure()
+
     # Sense, cover, and discover within VN neighborhood at current pose
     for r in robots:
         x, y = r.pos
         mark_visible(covered, x, y)
         discover_targets_in_vnhood(x, y, targets, found_targets)
 
-    # Move one cell
+    # Move one cell (failed robots won't move)
     for r in robots:
         r.step()
 
@@ -229,6 +328,17 @@ def sim_step():
         x, y = r.pos
         mark_visible(covered, x, y)
         discover_targets_in_vnhood(x, y, targets, found_targets)
+
+    # After updates for this step, see if any robot finished and can take over
+    _maybe_reallocate_failed_path()
+
+    # Tick the global step counter
+    global_step += 1
+
+    targets_found_over_time.append(len(found_targets))
+
+def _all_robots_finished():
+    return all(r.idx >= len(r.path) - 1 for r in robots)
 
 # -----------------------------
 # Animation update
@@ -241,8 +351,20 @@ def update(_frame):
     world_img.set_data(img)
     shared_img.set_data(img)
 
-    # Robots
-    robot_scatter.set_offsets(np.array([[r.pos[0] + 0.5, r.pos[1] + 0.5] for r in robots]))
+    # Robots (positions)
+    positions = np.array([[r.pos[0] + 0.5, r.pos[1] + 0.5] for r in robots])
+    robot_scatter.set_offsets(positions)
+
+    # NEW: Colors (failed robots red)
+    colors = ['red' if r.failed else 'k' for r in robots]
+    robot_scatter.set_facecolors(colors)
+    robot_scatter.set_edgecolors(colors)
+
+    # NEW: Labels (append " (failed)")
+    for i, r in enumerate(robots):
+        robot_labels[i].set_position((r.pos[0] + 0.6, r.pos[1] + 0.6))
+        robot_labels[i].set_text(f"R{r.id}" + (" (failed)" if r.failed else ""))
+        robot_labels[i].set_color('red' if r.failed else 'k')
 
     # Paths overlays
     for i, r in enumerate(robots):
@@ -272,23 +394,50 @@ def update(_frame):
         f"Covered: {covered.sum()} / {W*H} cells, Found targets: {len(found_targets)} / {len(targets)}"
     )
 
+    global plot_saved
+    if (not plot_saved) and _all_robots_finished():
+        # pick an output directory; reuse existing if you have one
+        try:
+            out_dir = OUTPUT_DIR  # if your script already defines it
+        except NameError:
+            out_dir = Path("out")
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        save_targets_over_time_plot(out_dir / "targets_over_time.png")
+        if FAIL_ROBOT_ID is not None:
+            np.save('output_metrics/centralized_appraoch_with_failure.npy', np.array(targets_found_over_time))
+        else:
+            np.save('output_metrics/centralized_appraoch_without_failure.npy', np.array(targets_found_over_time))
+        plot_saved = True
+
     frame_writer.save(fig)
-    return (world_img, shared_img, robot_scatter, und_plot, disc_plot) + \
+    return (world_img, shared_img, robot_scatter, und_plot, disc_plot, *robot_labels) + \
            tuple(sc for sc, _ in remaining_scatters) + \
            tuple(sc for sc, _ in visited_scatters)
-
 
 
 if __name__ == "__main__":
     # -----------------------------
     # Parameters
     # -----------------------------
-    GRID_SIZE = 75
+    GRID_SIZE = 25
     N_ROBOTS   = 8
     N_TARGETS  = 30
     STEPS_PER_FRAME = 1
     INTERVAL_MS     = 80
     RANDOM_SEED     = 7
+
+    # for metric - number of targets detected over time steps
+    targets_found_over_time = []   # cumulative #found after each sim_step
+    plot_saved = False             # guard so we only write once
+    OUTPUT_DIR = Path('output_frames/centralized_approach')
+
+    # Failure scenario (NEW)
+    FAIL_ROBOT_ID = None#1     # which robot fails
+    FAIL_AT_STEP  = None#10  # at which sim step it fails
+    global_step = 0
+    failure_triggered = False
+    failure_reallocated = False
 
     # Capacitated k-means (balanced power diagram) params
     MAX_ITERS_ASSIGN  = 30
@@ -373,10 +522,18 @@ if __name__ == "__main__":
     ax_world.grid(which='major', color='k', alpha=0.15, linewidth=0.5)
     ax_world.grid(which='minor', color='k', alpha=0.05, linewidth=0.2)
 
-    # Robots
+    # Robots (colored markers)
+    robot_colors = ['k' for _ in robots]  # black initially
     robot_scatter = ax_world.scatter([r.pos[0] + 0.5 for r in robots],
                                     [r.pos[1] + 0.5 for r in robots],
-                                    s=40, marker='o', c='k', zorder=4)
+                                    s=40, marker='o', c=robot_colors, zorder=4)
+
+    # Labels above robots
+    robot_labels = []
+    for r in robots:
+        txt = ax_world.text(r.pos[0] + 0.6, r.pos[1] + 0.6,
+                            f"R{r.id}", fontsize=7, color='k', zorder=6)
+        robot_labels.append(txt)
 
     # Paths (remaining vs visited)
     remaining_scatters, visited_scatters = [], []
