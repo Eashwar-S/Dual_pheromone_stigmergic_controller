@@ -17,6 +17,7 @@ __all__ = [
 ]
 
 
+
 def compute_fps(interval_ms: int) -> int:
     """Return frames-per-second for a given animation interval in milliseconds."""
     if interval_ms <= 0:

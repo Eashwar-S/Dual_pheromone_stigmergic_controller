@@ -205,3 +205,8 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# ignore all .png output files
+output_frames/centralized_approach/*.png
+output_frames/stigmergy_random_walk/*.png

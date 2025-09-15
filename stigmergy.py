@@ -174,7 +174,7 @@ if __name__ == "__main__":
     # -----------------------------
     # Parameters
     # -----------------------------
-    GRID_SIZE = 75
+    GRID_SIZE = 25
     N_ROBOTS = 8
     N_TARGETS = 30
     RANDOM_SEED = 7
