@@ -1,13 +1,14 @@
+# --- ADDITIONS/CHANGES START HERE (visualization code below remains unchanged) ---
+
 import numpy as np
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
-from typing import List, Tuple, Set, Optional
+from typing import List, Tuple, Set, Optional, Dict
 from pathlib import Path
 from simulation import FrameWriter, compute_fps, make_writer, run_animation
 
-
 # -----------------------------
-# Utilities
+# Utilities (existing + new)
 # -----------------------------
 def generate_unique_targets(grid_size: int, m: int) -> Set[Tuple[int, int]]:
     cells = [(x, y) for x in range(grid_size) for y in range(grid_size)]
@@ -22,6 +23,15 @@ def neighbors_vn(x: int, y: int, W: int, H: int) -> List[Tuple[int,int]]:
     if x+1 < W:  out.append((x+1, y))
     return out
 
+# ---- NEW: 4-neighborhood (no center) ----
+def neighbors_vn_4(x: int, y: int, W: int, H: int) -> List[Tuple[int, int]]:
+    out: List[Tuple[int, int]] = []
+    if y - 1 >= 0: out.append((x, y - 1))
+    if y + 1 < H:  out.append((x, y + 1))
+    if x - 1 >= 0: out.append((x - 1, y))
+    if x + 1 < W:  out.append((x + 1, y))
+    return out
+
 def mark_visible_bool(grid_bool: np.ndarray, x: int, y: int):
     """Mark current cell + VN neighbors True on the provided boolean grid."""
     H, W = grid_bool.shape
@@ -31,13 +41,37 @@ def mark_visible_bool(grid_bool: np.ndarray, x: int, y: int):
     if x-1 >= 0: grid_bool[y, x-1] = True
     if x+1 < W:  grid_bool[y, x+1] = True
 
+# ---- NEW: mark + report if anything was new this call ----
+def mark_and_check_new(grid_bool: np.ndarray, x: int, y: int) -> bool:
+    H, W = grid_bool.shape
+    new_found = False
+    if not grid_bool[y, x]:
+        grid_bool[y, x] = True; new_found = True
+    if y-1 >= 0 and not grid_bool[y-1, x]:
+        grid_bool[y-1, x] = True; new_found = True
+    if y+1 < H and not grid_bool[y+1, x]:
+        grid_bool[y+1, x] = True; new_found = True
+    if x-1 >= 0 and not grid_bool[y, x-1]:
+        grid_bool[y, x-1] = True; new_found = True
+    if x+1 < W and not grid_bool[y, x+1]:
+        grid_bool[y, x+1] = True; new_found = True
+    return new_found
+
 def discover_vn(x: int, y: int, targets: Set[Tuple[int,int]], found: Set[Tuple[int,int]], W: int, H: int):
     for (nx, ny) in neighbors_vn(x, y, W, H):
         if (nx, ny) in targets:
             found.add((nx, ny))
 
+# ---- NEW: skip deposit if all 4 neighbors already have pheromone ----
+def surrounded_by_pheromone(x: int, y: int, pher: np.ndarray) -> bool:
+    H, W = pher.shape
+    for nx, ny in neighbors_vn_4(x, y, W, H):
+        if pher[ny, nx] <= 0.0:
+            return False
+    return True
+
 # -----------------------------
-# Robot with PRIVATE local map  (NEW)
+# Robot with PRIVATE local map  (extended)
 # -----------------------------
 @dataclass
 class Robot:
@@ -46,10 +80,13 @@ class Robot:
     y: int
     local_covered: np.ndarray  # (H,W) bool, private per-robot map
     last_move: Optional[Tuple[int,int]] = None
-    failed: bool = False  # <-- NEW
+    failed: bool = False  # freezes in place once failed
+    # ---- NEW anti-stagnation state ----
+    stagnation_steps: int = 0
+    random_walk_remaining: int = 0
 
-    def choose_move(self, pher: np.ndarray) -> Tuple[int,int]:
-        """Biased random step among VN neighbors (no 'stay')."""
+    # ---- UPDATED: supports uniform (pheromone-agnostic) random walk ----
+    def choose_move(self, pher: np.ndarray, uniform_random: bool = False) -> Tuple[int,int]:
         H, W = pher.shape
         candidates: List[Tuple[int,int]] = []
         if self.y-1 >= 0: candidates.append((self.x, self.y-1))
@@ -58,6 +95,10 @@ class Robot:
         if self.x+1 < W:  candidates.append((self.x+1, self.y))
         if not candidates:
             return (self.x, self.y)
+
+        if uniform_random:
+            idx = rng.integers(len(candidates))
+            return candidates[int(idx)]
 
         # Prefer locally-uncovered, avoid pheromone
         uncov = [(nx, ny) for (nx, ny) in candidates if not self.local_covered[ny, nx]]
@@ -78,13 +119,16 @@ class Robot:
 
     def step(self, pher: np.ndarray):
         if self.failed:
-            return  # <-- NEW: freeze in place once failed
-        nx, ny = self.choose_move(pher)
+            return
+        uniform = (self.random_walk_remaining > 0)
+        nx, ny = self.choose_move(pher, uniform_random=uniform)
         self.last_move = (nx - self.x, ny - self.y)
         self.x, self.y = nx, ny
+        if self.random_walk_remaining > 0:
+            self.random_walk_remaining -= 1
 
 # -----------------------------
-# Visualization helpers
+# Visualization helpers (unchanged)
 # -----------------------------
 def coverage_to_image(cv: np.ndarray) -> np.ndarray:
     img = np.ones(cv.shape, dtype=float)
@@ -102,18 +146,20 @@ def pheromone_to_rgba(ph: np.ndarray, alpha_scale: float = 0.35) -> np.ndarray:
     return rgba
 
 # -----------------------------
-# Simulation step
+# Multiple-failure support (NEW)
 # -----------------------------
-
-def _maybe_trigger_failure():
-    """Freeze the chosen robot exactly at FAIL_AT_STEP."""
-    global failure_triggered
-    if failure_triggered or FAIL_ROBOT_ID is None or FAIL_AT_STEP is None:
+def _maybe_trigger_failures():
+    """Freeze all robots whose fail step equals the current global_step."""
+    if not FAILURE_EVENTS_BY_STEP:
         return
-    if global_step == FAIL_AT_STEP:
-        robots[FAIL_ROBOT_ID].failed = True
-        failure_triggered = True
+    if global_step in FAILURE_EVENTS_BY_STEP:
+        for rid in FAILURE_EVENTS_BY_STEP[global_step]:
+            if 0 <= rid < len(robots):
+                robots[rid].failed = True
 
+# -----------------------------
+# Simulation step (UPDATED)
+# -----------------------------
 def save_targets_over_time_plot(path: Path):
     """Save dotted line plot: time step vs total targets detected (cumulative)."""
     import matplotlib.pyplot as plt
@@ -132,41 +178,62 @@ def save_targets_over_time_plot(path: Path):
 def sim_step():
     global pher, global_step
 
-    # NEW: trigger a failure exactly at the configured step
-    _maybe_trigger_failure()
+    # NEW: trigger all failures scheduled at this step
+    _maybe_trigger_failures()
 
-    # Evaporate pheromone
-    pher *= 1#np.exp(-1.0 / TAU_DECAY)
+    # ---- DISABLE EVAPORATION ----
+    # (no decay applied)
     pher[pher < PHER_MIN] = 0.0
 
-    # Sense/cover/discover; deposit; advance
+    # Pre-move sense/cover/discover + gated deposit
+    any_new_step = [False] * len(robots)
     for r in robots:
-        mark_visible_bool(r.local_covered, r.x, r.y)  # private
-        mark_visible_bool(covered_global, r.x, r.y)   # visualization union
+        # mark local + global and detect if new ground was covered
+        new_local = mark_and_check_new(r.local_covered, r.x, r.y)
+        new_global = mark_and_check_new(covered_global, r.x, r.y)
+        any_new = (new_local or new_global)
+        any_new_step[r.id] = any_new
         discover_vn(r.x, r.y, targets, found_targets, W, H)
-        pher[r.y, r.x] += PHER_DEPOSIT
+
+        # skip deposit if surrounded
+        if not surrounded_by_pheromone(r.x, r.y, pher):
+            pher[r.y, r.x] += PHER_DEPOSIT
+
+    # Anti-stagnation: start random walk if needed
+    for r in robots:
+        if r.failed:
+            continue
+        if any_new_step[r.id]:
+            r.stagnation_steps = 0
+        else:
+            r.stagnation_steps += 1
+            if r.stagnation_steps >= STAGNATION_X and r.random_walk_remaining == 0:
+                r.random_walk_remaining = RANDOMWALK_Y
+                r.stagnation_steps = 0
 
     # Move robots (failed ones won't move because Robot.step guards it)
     for r in robots:
         r.step(pher)
 
-    # Post-move sensing & a small extra deposit
+    # Post-move sensing + gated small deposit
     for r in robots:
-        mark_visible_bool(r.local_covered, r.x, r.y)
-        mark_visible_bool(covered_global, r.x, r.y)
+        new_local = mark_and_check_new(r.local_covered, r.x, r.y)
+        new_global = mark_and_check_new(covered_global, r.x, r.y)
+        if new_local or new_global:
+            r.stagnation_steps = 0
         discover_vn(r.x, r.y, targets, found_targets, W, H)
-        pher[r.y, r.x] += 0.3 * PHER_DEPOSIT
+        if not surrounded_by_pheromone(r.x, r.y, pher):
+            pher[r.y, r.x] += 0.3 * PHER_DEPOSIT
 
-    # NEW: time bookkeeping + cumulative target logging
+    # time bookkeeping + cumulative target logging
     global_step += 1
     targets_found_over_time.append(len(found_targets))
-
 
 def _all_targets_found() -> bool:
     return len(found_targets) >= len(targets)
 
 # -----------------------------
-# Animation update
+# Animation update (visualization left intact)
 # -----------------------------
 def update(_frame):
     for _ in range(STEPS_PER_FRAME):
@@ -177,7 +244,7 @@ def update(_frame):
     robot_scat.set_offsets(np.array([[r.x + 0.5, r.y + 0.5] for r in robots]))
     obs_pher_img.set_data(pheromone_to_rgba(pher))
 
-    # NEW: failed robots in red + label suffix
+    # failed robots in red + label suffix
     colors = ['red' if r.failed else 'k' for r in robots]
     robot_scat.set_facecolors(colors)
     robot_scat.set_edgecolors(colors)
@@ -204,7 +271,7 @@ def update(_frame):
         f"Covered (union): {covered_global.sum()} / {W*H}, Found targets: {len(found_targets)} / {len(targets)}"
     )
 
-    # NEW: save dotted targets-over-time plot once, when all targets are found
+    # save dotted targets-over-time plot once, when all targets are found
     global plot_saved
     if (not plot_saved) and _all_targets_found():
         try:
@@ -214,7 +281,8 @@ def update(_frame):
         out_dir.mkdir(parents=True, exist_ok=True)
         save_targets_over_time_plot(out_dir / "targets_over_time_stigmergy.png")
         
-        if FAIL_ROBOT_ID is not None:
+        # keep existing filenames
+        if FAIL_EVENTS:
             np.save('output_metrics/stigmergy_with_failure.npy', np.array(targets_found_over_time))
         else:
             np.save('output_metrics/stigmergy_without_failure.npy', np.array(targets_found_over_time))
@@ -224,14 +292,19 @@ def update(_frame):
     frame_writer.save(fig)
     return (world_cov_img, world_pher_img, robot_scat, obs_pher_img, und_plot, disc_plot, *robot_labels)
 
+
+
+# -----------------------------
+# MAIN (visualization block below is UNCHANGED except globals)
+# -----------------------------
 if __name__ == "__main__":
     # -----------------------------
     # Parameters
     # -----------------------------
     GRID_SIZE = 25
-    N_ROBOTS = 8
-    N_TARGETS = 30
-    RANDOM_SEED = 7
+    N_ROBOTS = 5
+    N_TARGETS = 80
+    RANDOM_SEED = 73550
     STEPS_PER_FRAME = 1
     INTERVAL_MS = 80
 
@@ -240,20 +313,26 @@ if __name__ == "__main__":
     plot_saved = False             # guard so we only write once
     OUTPUT_DIR = Path("output_frames/stigmergy_random_walk/")
 
-    # Failure scenario (NEW)
-    FAIL_ROBOT_ID = 1   # e.g., 2
-    FAIL_AT_STEP  = 10   # e.g., 800
+    # ---- MULTIPLE FAILURES (edit this list) ----
+    # e.g., [(2, 100), (4, 250)]
+    FAIL_EVENTS: List[Tuple[int,int]] = [(0, 47)]
+    FAILURE_EVENTS_BY_STEP: Dict[int, List[int]] = {}
+    for rid, st in FAIL_EVENTS:
+        FAILURE_EVENTS_BY_STEP.setdefault(int(st), []).append(int(rid))
+
     global_step = 0
-    failure_triggered = False
 
     # Stigmergy / pheromone
     PHER_DEPOSIT = 1.0
-    TAU_DECAY = 60.0
+    TAU_DECAY = 600.0          # kept for compatibility; NOT used (no evaporation)
     PHER_MIN = 1e-6
-    BIAS_ALPHA = 250          # avoid pheromone strength
-    UNCOVERED_BONUS = 10.0     # (kept) slight bonus for unexplored
-    rng = np.random.default_rng(RANDOM_SEED)
+    BIAS_ALPHA = 1             # avoid-pheromone strength
+    UNCOVERED_BONUS = 10.0
+    # ---- NEW anti-stagnation knobs (fixed across a sweep/experiment) ----
+    STAGNATION_X = 15          # x consecutive steps w/ no new ground
+    RANDOMWALK_Y = 10          # then y uniform random-walk steps
 
+    rng = np.random.default_rng(RANDOM_SEED)
 
     FPS = compute_fps(INTERVAL_MS)
     writer = make_writer(INTERVAL_MS, title="Stigmergy - random walk", artist="you")
@@ -266,12 +345,10 @@ if __name__ == "__main__":
     W = H = GRID_SIZE
     robot_starting_x = W // 2
     robot_starting_y = H // 2
-    # Robots spawn  
-    all_cells = [(x, y) for x in range(W) for y in range(H)]
-    spawn_idx = rng.choice(len(all_cells), size=N_ROBOTS, replace=False)
-    spawn_positions = [all_cells[i] for i in spawn_idx]
-    # robots = [Robot(i, x, y, local_covered=np.zeros((H, W), dtype=bool)) for i, (x, y) in enumerate(spawn_positions)]
-    robots = [Robot(i, robot_starting_x, robot_starting_y, local_covered=np.zeros((H, W), dtype=bool)) for i in range(N_ROBOTS)]
+
+    # Spawn all robots at center (as in your current script)
+    robots = [Robot(i, robot_starting_x, robot_starting_y,
+                    local_covered=np.zeros((H, W), dtype=bool)) for i in range(N_ROBOTS)]
 
     # Targets & state
     targets = generate_unique_targets(GRID_SIZE, N_TARGETS)
@@ -280,10 +357,9 @@ if __name__ == "__main__":
     # Global (for visualization only — NOT shared by robots)
     covered_global = np.zeros((H, W), dtype=bool)
     pher = np.zeros((H, W), dtype=float)
-    DECAY_FACTOR = np.exp(-1.0 / TAU_DECAY)
 
     # -----------------------------
-    # Matplotlib layout
+    # Matplotlib layout (UNTOUCHED)
     # -----------------------------
     fig = plt.figure(figsize=(12.5, 6.2))
     gs = fig.add_gridspec(1, 2, width_ratios=[1.25, 1.0], wspace=0.12)
@@ -306,7 +382,7 @@ if __name__ == "__main__":
                                 [r.y + 0.5 for r in robots],
                                 s=40, marker='o', c=robot_colors, zorder=3)
 
-    # NEW: text labels above robots
+    # text labels above robots
     robot_labels = []
     for r in robots:
         t = ax_world.text(r.x + 0.6, r.y + 0.6, f"R{r.id}",
@@ -340,10 +416,9 @@ if __name__ == "__main__":
     ax_obs.set_xlim(0, W); ax_obs.set_ylim(0, H); ax_obs.set_aspect('equal', adjustable='box')
     ax_obs.legend(loc='upper right', fontsize=8, frameon=False)
 
-    
-
     # -----------------------------
     # Run
     # -----------------------------
     anim = run_animation(fig, update, frames=200000, interval_ms=INTERVAL_MS, blit=False)
     plt.show()
+# --- END OF FILE ---

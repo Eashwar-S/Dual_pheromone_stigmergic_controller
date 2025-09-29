@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
-from typing import List, Tuple, Set
+from typing import List, Tuple, Set, Deque
+from collections import deque
 from pathlib import Path
 
 from simulation import FrameWriter, compute_fps, make_writer, run_animation
@@ -35,7 +36,6 @@ def balanced_power_diagram_assign(points: np.ndarray,
     k = centers.shape[0]
     lambdas = np.zeros(k, dtype=float)
     labels = np.zeros(points.shape[0], dtype=int)
-    # print(f' points - {points}')
     step = step0
     for _ in range(iters):
         diffs = points[:, None, :] - centers[None, :, :]
@@ -100,19 +100,14 @@ def manhattan_path(start: Tuple[int, int], end: Tuple[int, int]) -> List[Tuple[i
     path = [start]
     x1, y1 = start
     x2, y2 = end
-    
-    # Move horizontally first
     dx = 1 if x2 > x1 else -1
     while x1 != x2:
         x1 += dx
         path.append((x1, y1))
-    
-    # Then move vertically
     dy = 1 if y2 > y1 else -1
     while y1 != y2:
         y1 += dy
         path.append((x1, y1))
-    
     return path
 
 def sensor_aware_path_for_region(mask: np.ndarray) -> List[Tuple[int,int]]:
@@ -123,7 +118,6 @@ def sensor_aware_path_for_region(mask: np.ndarray) -> List[Tuple[int,int]]:
     for y in range(0, H, 2):
         xs = [x for x in range(W) if mask[y, x]]
         if not xs: continue
-        # contiguous segments
         segs = []
         s = xs[0]; p = xs[0]
         for x in xs[1:]:
@@ -163,22 +157,14 @@ def region_colors(zones: np.ndarray, alpha: float = 0.12) -> Tuple[np.ndarray, d
     return rgba, {i: cmap(i) for i in np.unique(zones)}
 
 def draw_voronoi_borders(ax: plt.Axes, zones: np.ndarray, color: str = '#0b3d91', lw: float = 1.2, alpha: float = 0.9):
-    """
-    Draw dark blue borders along edges where adjacent cells belong to different zones.
-    """
     H, W = zones.shape
-    # Vertical edges between (x,y) and (x+1,y)
     for y in range(H):
         x = 0
         while x < W - 1:
             if zones[y, x] != zones[y, x + 1]:
-                # extend a vertical segment if consecutive differing edges align
                 x0 = x + 1
-                y0 = y
-                # vertical segment at x+1 from y..y+1
                 ax.plot([x0, x0], [y, y + 1], color=color, linewidth=lw, alpha=alpha, zorder=3)
             x += 1
-    # Horizontal edges between (x,y) and (x,y+1)
     for x in range(W):
         y = 0
         while y < H - 1:
@@ -195,109 +181,122 @@ class Robot:
     id: int
     path: List[Tuple[int, int]]
     idx: int = 0
-    failed: bool = False  # <-- NEW
+    failed: bool = False
 
     @property
     def pos(self) -> Tuple[int, int]:
         return self.path[self.idx]
 
     def step(self):
-        # If failed, it stays frozen in place.
         if self.failed:
             return
         if self.idx < len(self.path) - 1:
             self.idx += 1
 
 # -----------------------------
-# Simulation step
+# Simulation helpers (targets)
 # -----------------------------
 def discover_targets_in_vnhood(x: int, y: int, targets: Set[Tuple[int,int]], found: Set[Tuple[int,int]]):
-    """NEW: discover targets in current cell OR its 4-neighborhood."""
+    """Discover targets in current cell OR its 4-neighborhood."""
     H, W = covered.shape
     for (nx, ny) in neighbors_von_neumann(x, y, W, H):
         if (nx, ny) in targets:
             found.add((nx, ny))
 
-
-def _maybe_trigger_failure():
-    """Trigger the failure event exactly at FAIL_AT_STEP by freezing the robot."""
-    global failure_triggered
-    if failure_triggered:
-        return
-    if FAIL_ROBOT_ID is None or FAIL_AT_STEP is None:
-        return
-    if global_step == FAIL_AT_STEP:
-        r = robots[FAIL_ROBOT_ID]
-        r.failed = True
-        failure_triggered = True
-
-def _first_finisher_after_failure():
+# -----------------------------
+# Failure handling (MULTI-ROBOT)
+# -----------------------------
+def _maybe_trigger_failures():
     """
-    Return the first (non-failed) robot that has finished its own area (idx at end)
-    after the failure happened. If multiple are already finished, the first in list wins.
+    Trigger all failures scheduled for the current global_step.
+    Failed robots freeze in place and are enqueued for takeover.
     """
-    if not failure_triggered:
-        return None
+    global any_failure_occurred
+    if FAILURE_EVENTS_BY_STEP.get(global_step):
+        for rid in FAILURE_EVENTS_BY_STEP[global_step]:
+            if rid in failures_triggered:
+                continue
+            r = robots[rid]
+            r.failed = True
+            failures_triggered.add(rid)
+            pending_failures.append(rid)
+            any_failure_occurred = True  # for metrics naming
+
+def _finished_robots_after_failure() -> List[int]:
+    """
+    Return IDs of non-failed robots that have finished their own area (idx at end),
+    only after at least one failure has occurred.
+    """
+    if not any_failure_occurred:
+        return []
+    finishers = []
     for r in robots:
-        if r.id == FAIL_ROBOT_ID:
-            continue
         if not r.failed and r.idx >= len(r.path) - 1:
-            return r
-    return None
+            finishers.append(r.id)
+    return finishers
 
 def _extend_full_pts_for_robot(robot_id: int, extra_path: List[Tuple[int,int]]):
-    """
-    Update the 'remaining_scatters' full point cache so the animation overlays
-    reflect the extended path.
-    """
     rem_sc, full_pts = remaining_scatters[robot_id]
     if len(extra_path):
         add_pts = np.array([[x + 0.5, y + 0.5] for (x, y) in extra_path])
         full_pts = np.vstack([full_pts, add_pts])
         remaining_scatters[robot_id] = (rem_sc, full_pts)
 
-def _maybe_reallocate_failed_path():
-    """Once a robot finishes after the failure, give it the failed robot's remaining path."""
-    global failure_reallocated
+def _takeover_failed_robot(takeover_id: int, failed_id: int):
+    """
+    Assign takeover robot to:
+      1) Navigate to failed robot's frozen position
+      2) Append failed robot's remaining path (skipping duplicate seam cell)
+    Trim failed robot's path to its reached index.
+    """
+    takeover = robots[takeover_id]
+    failed = robots[failed_id]
 
-    if not failure_triggered or failure_reallocated:
-        return
+    # Build extension
+    nav = manhattan_path(takeover.pos, failed.pos)   # includes takeover.pos and failed.pos
+    rem = failed.path[failed.idx:]                  # includes failed.pos
 
-    takeover = _first_finisher_after_failure()
-    if takeover is None:
-        return
-
-    failed = robots[FAIL_ROBOT_ID]
-
-    # Build extension: from takeover's current (finished) pos to failed's frozen pos,
-    # then append the failed robot's remaining path.
-    nav = manhattan_path(takeover.pos, failed.pos)          # [start,..., failed.pos]
-    rem = failed.path[failed.idx:]                          # [failed.pos, ...]
-
-    # Avoid duplicates at the seam
-    extension = nav[1:]  # skip takeover.pos
+    extension: List[Tuple[int,int]] = []
+    if len(nav) > 1:
+        extension += nav[1:]                        # skip duplicate takeover.pos
     if len(rem) > 1:
-        extension += rem[1:]  # skip failed.pos (already included by nav)
+        extension += rem[1:]                        # skip duplicate failed.pos
 
-    # Append to takeover path and update overlays
-    takeover.path.extend(extension)
-    _extend_full_pts_for_robot(takeover.id, extension)
+    # Apply extension
+    if extension:
+        takeover.path.extend(extension)
+        _extend_full_pts_for_robot(takeover.id, extension)
 
-    # Trim failed robot path to what it actually completed (freeze at current idx)
+    # Freeze/trim failed robot path to what it actually completed
     failed.path = failed.path[:failed.idx + 1]
-    _extend_full_pts_for_robot(failed.id, [])  # keep overlays consistent even if no extra
+    _extend_full_pts_for_robot(failed.id, [])  # keep overlays consistent
 
-    failure_reallocated = True
+def _maybe_reallocate_failed_paths():
+    """
+    When robots finish, they each take over exactly one failed robot (FIFO).
+    Handles multiple finishers and multiple pending failures in the same step.
+    """
+    if not pending_failures:
+        return
+    finishers = _finished_robots_after_failure()
+    if not finishers:
+        return
 
+    # Assign one failed robot per finisher in FIFO order
+    for fin_id in finishers:
+        if not pending_failures:
+            break
+        failed_id = pending_failures.popleft()
+        _takeover_failed_robot(fin_id, failed_id)
+
+# -----------------------------
+# Plot helpers
+# -----------------------------
 def save_targets_over_time_plot(path: Path):
-    """
-    Save a dotted line plot: time step (x) vs total targets detected (y, cumulative).
-    """
     xs = np.arange(len(targets_found_over_time))
     ys = np.asarray(targets_found_over_time, dtype=float)
-
     fig, ax = plt.subplots(figsize=(6, 3.5))
-    ax.plot(xs, ys, linestyle=':', linewidth=2)  # dotted line
+    ax.plot(xs, ys, linestyle=':', linewidth=2)
     ax.set_xlabel("Time step")
     ax.set_ylabel("Total targets detected")
     ax.set_title("Targets detected over time")
@@ -306,14 +305,16 @@ def save_targets_over_time_plot(path: Path):
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
-
+# -----------------------------
+# Simulation step
+# -----------------------------
 def sim_step():
     global global_step
 
-    # Check failure BEFORE any robot moves this step, so the failed one won't move.
-    _maybe_trigger_failure()
+    # Trigger failures scheduled for this step (before any move)
+    _maybe_trigger_failures()
 
-    # Sense, cover, and discover within VN neighborhood at current pose
+    # Sense, cover, and discover at current pose
     for r in robots:
         x, y = r.pos
         mark_visible(covered, x, y)
@@ -329,12 +330,10 @@ def sim_step():
         mark_visible(covered, x, y)
         discover_targets_in_vnhood(x, y, targets, found_targets)
 
-    # After updates for this step, see if any robot finished and can take over
-    _maybe_reallocate_failed_path()
+    # If any failures pending and robots finished, reallocate
+    _maybe_reallocate_failed_paths()
 
-    # Tick the global step counter
     global_step += 1
-
     targets_found_over_time.append(len(found_targets))
 
 def _all_robots_finished():
@@ -355,12 +354,12 @@ def update(_frame):
     positions = np.array([[r.pos[0] + 0.5, r.pos[1] + 0.5] for r in robots])
     robot_scatter.set_offsets(positions)
 
-    # NEW: Colors (failed robots red)
+    # Colors (failed robots red)
     colors = ['red' if r.failed else 'k' for r in robots]
     robot_scatter.set_facecolors(colors)
     robot_scatter.set_edgecolors(colors)
 
-    # NEW: Labels (append " (failed)")
+    # Labels
     for i, r in enumerate(robots):
         robot_labels[i].set_position((r.pos[0] + 0.6, r.pos[1] + 0.6))
         robot_labels[i].set_text(f"R{r.id}" + (" (failed)" if r.failed else ""))
@@ -396,15 +395,15 @@ def update(_frame):
 
     global plot_saved
     if (not plot_saved) and _all_robots_finished():
-        # pick an output directory; reuse existing if you have one
         try:
-            out_dir = OUTPUT_DIR  # if your script already defines it
+            out_dir = OUTPUT_DIR
         except NameError:
             out_dir = Path("out")
         out_dir.mkdir(parents=True, exist_ok=True)
 
         save_targets_over_time_plot(out_dir / "targets_over_time.png")
-        if FAIL_ROBOT_ID is not None:
+        # Save metrics depending on whether any failure occurred
+        if any_failure_occurred:
             np.save('output_metrics/centralized_appraoch_with_failure.npy', np.array(targets_found_over_time))
         else:
             np.save('output_metrics/centralized_appraoch_without_failure.npy', np.array(targets_found_over_time))
@@ -428,16 +427,23 @@ if __name__ == "__main__":
     RANDOM_SEED     = 7
 
     # for metric - number of targets detected over time steps
-    targets_found_over_time = []   # cumulative #found after each sim_step
-    plot_saved = False             # guard so we only write once
+    targets_found_over_time = []
+    plot_saved = False
     OUTPUT_DIR = Path('output_frames/centralized_approach')
 
-    # Failure scenario (NEW)
-    FAIL_ROBOT_ID = None#1     # which robot fails
-    FAIL_AT_STEP  = None#10  # at which sim step it fails
+    # ---------- MULTI-ROBOT FAILURE CONFIG ----------
+    # List of (robot_id, fail_step) pairs. Example: [(1, 10), (5, 25)]
+    FAIL_EVENTS: List[Tuple[int, int]] = [(1, 10), (2, 20)]
+
+    # Build a dict: step -> [robot_ids]
+    FAILURE_EVENTS_BY_STEP = {}
+    for rid, step in FAIL_EVENTS:
+        FAILURE_EVENTS_BY_STEP.setdefault(step, []).append(rid)
+
     global_step = 0
-    failure_triggered = False
-    failure_reallocated = False
+    failures_triggered: Set[int] = set()   # robots already failed
+    pending_failures: Deque[int] = deque() # queue of failed robots awaiting takeover
+    any_failure_occurred: bool = False
 
     # Capacitated k-means (balanced power diagram) params
     MAX_ITERS_ASSIGN  = 30
@@ -446,7 +452,6 @@ if __name__ == "__main__":
     LAMBDA_DECAY = 0.1
 
     rng = np.random.default_rng(RANDOM_SEED)
-    # Pick a frame rate (roughly matches your interactive speed)
     FPS = compute_fps(INTERVAL_MS)
     writer = make_writer(INTERVAL_MS, title="Centralized Swarm", artist="you")
     dir = "output_frames/centralized_approach/"
@@ -460,7 +465,7 @@ if __name__ == "__main__":
     points = np.column_stack((xx.ravel() + 0.5, yy.ravel() + 0.5))  # centers
 
     labels, centers = lloyd_balanced(points, N_ROBOTS, MAX_ITERS_CENTERS, MAX_ITERS_ASSIGN,
-                                    LAMBDA_STEP0, LAMBDA_DECAY, rng)
+                                     LAMBDA_STEP0, LAMBDA_DECAY, rng)
     zones = labels.reshape(H, W)
 
     # Per-robot masks & sweeping paths
@@ -478,18 +483,13 @@ if __name__ == "__main__":
     # Create full paths: center -> first cell of sweeping path -> sweeping path
     center_pos = (W // 2, H // 2)
     full_paths: List[List[Tuple[int,int]]] = []
-    
     for i in range(N_ROBOTS):
         sweeping_path = sweeping_paths[i]
         if sweeping_path:
-            # Create path from center to first position of sweeping path
             nav_path = manhattan_path(center_pos, sweeping_path[0])
-            # Combine navigation path (excluding the duplicate end point) with sweeping path
             full_path = nav_path[:-1] + sweeping_path
         else:
-            # Fallback if no sweeping path
             full_path = [center_pos]
-        
         full_paths.append(full_path)
 
     robots = [Robot(i, full_paths[i]) for i in range(N_ROBOTS)]
@@ -501,18 +501,15 @@ if __name__ == "__main__":
     # -----------------------------
     # Matplotlib setup
     # -----------------------------
-
     fig = plt.figure(figsize=(12.0, 6.4))
     gs = fig.add_gridspec(1, 2, width_ratios=[1.25, 1], wspace=0.12)
     ax_world = fig.add_subplot(gs[0, 0])
     ax_shared = fig.add_subplot(gs[0, 1])
 
-    # Faint Voronoi regions + coverage
     zone_rgba, _ = region_colors(zones, alpha=0.12)
     ax_world.imshow(zone_rgba, origin='lower', extent=[0, W, 0, H])
     world_img = ax_world.imshow(coverage_to_image(covered), origin='lower', extent=[0, W, 0, H], vmin=0.0, vmax=1.0)
 
-    # Draw dark blue Voronoi borders (NEW)
     draw_voronoi_borders(ax_world, zones, color='#003366', lw=1.2, alpha=0.9)
 
     ax_world.set_title("World — Equal-Area Voronoi Partition (Centralized)")
@@ -522,42 +519,36 @@ if __name__ == "__main__":
     ax_world.grid(which='major', color='k', alpha=0.15, linewidth=0.5)
     ax_world.grid(which='minor', color='k', alpha=0.05, linewidth=0.2)
 
-    # Robots (colored markers)
-    robot_colors = ['k' for _ in robots]  # black initially
+    robot_colors = ['k' for _ in robots]
     robot_scatter = ax_world.scatter([r.pos[0] + 0.5 for r in robots],
-                                    [r.pos[1] + 0.5 for r in robots],
-                                    s=40, marker='o', c=robot_colors, zorder=4)
+                                     [r.pos[1] + 0.5 for r in robots],
+                                     s=40, marker='o', c=robot_colors, zorder=4)
 
-    # Labels above robots
     robot_labels = []
     for r in robots:
         txt = ax_world.text(r.pos[0] + 0.6, r.pos[1] + 0.6,
                             f"R{r.id}", fontsize=7, color='k', zorder=6)
         robot_labels.append(txt)
 
-    # Paths (remaining vs visited)
     remaining_scatters, visited_scatters = [], []
     for r in robots:
         full_pts = np.array([[x + 0.5, y + 0.5] for (x, y) in r.path])
         rem_sc = ax_world.scatter(full_pts[:, 0], full_pts[:, 1], s=6, marker='s',
-                                facecolors='none', edgecolors='0.35', alpha=0.14, linewidths=0.45, zorder=1)
+                                  facecolors='none', edgecolors='0.35', alpha=0.14, linewidths=0.45, zorder=1)
         vis_sc = ax_world.scatter([], [], s=10, marker='s',
-                                facecolors='none', edgecolors='0.2', alpha=0.55, linewidths=0.6, zorder=2)
+                                  facecolors='none', edgecolors='0.2', alpha=0.55, linewidths=0.6, zorder=2)
         remaining_scatters.append((rem_sc, full_pts))
         visited_scatters.append((vis_sc, []))
 
-    # Targets in world
     if targets:
         tx_world, ty_world = zip(*targets)
     else:
         tx_world, ty_world = [], []
     ax_world.scatter([x + 0.5 for x in tx_world], [y + 0.5 for y in ty_world],
-                    s=20, marker='x', c='r', alpha=0.9, zorder=4)
+                     s=20, marker='x', c='r', alpha=0.9, zorder=4)
 
-    # Shared map (same overlays)
     ax_shared.imshow(zone_rgba, origin='lower', extent=[0, W, 0, H])
     shared_img = ax_shared.imshow(coverage_to_image(covered), origin='lower', extent=[0, W, 0, H], vmin=0.0, vmax=1.0)
-    # draw_voronoi_borders(ax_shared, zones, color='#003366', lw=1.2, alpha=0.9)
 
     ax_shared.set_title("Shared Map (Global Knowledge)")
     ax_shared.set_xlim(0, W); ax_shared.set_ylim(0, H); ax_shared.set_aspect('equal', adjustable='box')
@@ -567,16 +558,14 @@ if __name__ == "__main__":
     ax_shared.grid(which='minor', color='k', alpha=0.05, linewidth=0.2)
 
     disc_plot = ax_shared.scatter([], [], s=25, marker='o',
-                                facecolors='none', edgecolors='g', linewidths=1.5, label='Discovered')
+                                  facecolors='none', edgecolors='g', linewidths=1.5, label='Discovered')
     und_tx, und_ty = (list(zip(*targets)) if targets else ([], []))
     und_plot = ax_shared.scatter([x + 0.5 for x in und_tx], [y + 0.5 for y in und_ty],
-                                s=18, marker='x', c='r', label='Undiscovered')
+                                 s=18, marker='x', c='r', label='Undiscovered')
     ax_shared.legend(loc='upper right', fontsize=8, frameon=False)
-
 
     # -----------------------------
     # Run
     # -----------------------------
-
     anim = run_animation(fig, update, frames=2000000, interval_ms=INTERVAL_MS, blit=False)
     plt.show()
