@@ -127,21 +127,24 @@ def sensor_aware_path_for_region(mask: np.ndarray) -> List[Tuple[int,int]]:
                 manhattan_connect(path, x_next, y + 2)
     return path
 
-def neighbors_von_neumann(x: int, y: int, W: int, H: int) -> List[Tuple[int,int]]:
-    nbs = [(x, y)]
-    if y - 1 >= 0: nbs.append((x, y - 1))
-    if y + 1 < H:  nbs.append((x, y + 1))
-    if x - 1 >= 0: nbs.append((x - 1, y))
-    if x + 1 < W:  nbs.append((x + 1, y))
-    return nbs
+def neighbors_von_neumann(x: int, y: int, W: int, H: int, r: int = 5):
+    out = []
+    for dy in range(-r, r+1):
+        for dx in range(-r, r+1):
+            if abs(dx) + abs(dy) <= r:  # VN metric (Manhattan distance)
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < W and 0 <= ny < H:
+                    out.append((nx, ny))
+    return out
 
-def mark_visible(covered: np.ndarray, x: int, y: int):
-    H, W = covered.shape
-    covered[y, x] = True
-    if y - 1 >= 0: covered[y - 1, x] = True
-    if y + 1 < H:  covered[y + 1, x] = True
-    if x - 1 >= 0: covered[y, x - 1] = True
-    if x + 1 < W:  covered[y, x + 1] = True
+def mark_visible(grid_bool: np.ndarray, x: int, y: int, r: int = 5):
+    H, W = grid_bool.shape
+    for dy in range(-r, r+1):
+        for dx in range(-r, r+1):
+            if abs(dx) + abs(dy) <= r:
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < W and 0 <= ny < H:
+                    grid_bool[ny, nx] = True
 
 def discover_targets_in_vnhood(x: int, y: int, targets: Set[Tuple[int,int]], found: Set[Tuple[int,int]], W: int, H: int):
     for (nx, ny) in neighbors_von_neumann(x, y, W, H):
@@ -345,7 +348,7 @@ def run_experiments(
 ):
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
-    xlsx_path = out_path / "experiments_centralized.xlsx"
+    xlsx_path = out_path / "experiments_centralized_with_failure.xlsx"
 
     rows: List[Dict[str, object]] = []
 
@@ -419,10 +422,10 @@ def run_experiments(
 if __name__ == "__main__":
     run_experiments(
         out_dir="experiments",
-        grid_sizes=(25, 50, 75, 100),
-        robot_counts=(5, 10, 15, 20),
-        failure_counts=(1, 2, 4, 6),
+        grid_sizes=(200, 300, 400, 500),
+        robot_counts=(10, 15, 20, 25),
+        failure_counts=(2, 4, 6, 8),
         runs_per_scenario=1,
-        n_targets=(80, 100, 120, 150),
+        n_targets=(5, 10, 12, 15),
         base_seed=7,
     )
