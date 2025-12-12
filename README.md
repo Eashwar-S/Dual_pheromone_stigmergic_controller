@@ -17,7 +17,7 @@ python centralized_experimentation.py
 
 To run strigmergy with attractive and repulsive pheromones for both searching and converging to a target run:
 ```
-stigmergy_attractive_repulsive_integrated.py
+python stigmergy_attractive_repulsive_integrated.py
 ```
 
 
