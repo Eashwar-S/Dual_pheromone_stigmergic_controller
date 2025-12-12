@@ -15,5 +15,11 @@ python stigmergy_experimentation_without_evaporation.py
 python centralized_experimentation.py
 ```
 
+To run strigmergy with attractive and repulsive pheromones for both searching and converging to a target run:
+```
+stigmergy_attractive_repulsive_integrated.py
+```
+
+
 ## Results
 All results will be saved in the form of excel sheets in experiments folder.
