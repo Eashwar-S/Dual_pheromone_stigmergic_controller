@@ -61,6 +61,8 @@ class Robot:
     x: int
     y: int
     local_covered: np.ndarray
+    start_x: int 
+    start_y: int
     mode: str = "SEARCH"
     spiral_iter: Optional[object] = None
     visited_targets: Set[Tuple[int,int]] = field(default_factory=set)
@@ -69,24 +71,41 @@ class Robot:
     # NEW: History to prevent loops (last 6 steps)
     follow_history: Deque[Tuple[int,int]] = field(default_factory=lambda: deque(maxlen=6))
     
+    # NEW: Collision check helper
+    def is_clear(self, nx: int, ny: int, all_robots: List['Robot'], radius: int = 1) -> bool:
+        """
+        Checks if moving to (nx, ny) violates the collision radius of any OTHER robot.
+        Radius 1 means: Do not enter the 3x3 zone centered on another robot.
+        """
+        for r in all_robots:
+            if r.id == self.id:
+                continue
+            # Chebyshev distance (square neighborhood) check
+            if max(abs(r.x - nx), abs(r.y - ny)) <= radius:
+                return False
+        return True
+
     # ---------------------------------------------------------
     # 1. SEARCH MODE
     # ---------------------------------------------------------
     def calculate_utility(self, n_new_global, n_new_local, pher_sum):
-        KAPPA = 200.0
+        KAPPA = 20.0
         SIGMA = 10.0
         term1 = float(n_new_global)
         term2 = float(n_new_local) / KAPPA
         term3 = (np.tanh(-pher_sum / SIGMA) + 1.0) / (KAPPA ** 2)
         return term1 + term2 + term3
 
-    def choose_move_search(self, pher_rep: np.ndarray, pher_attr: np.ndarray) -> Tuple[int, int]:
+    def choose_move_search(self, pher_rep: np.ndarray, pher_attr: np.ndarray, all_robots: List['Robot']) -> Tuple[int, int]:
         H, W = pher_rep.shape
         candidates = []
         if self.y - 1 >= 0: candidates.append((self.x, self.y - 1))
         if self.y + 1 < H:  candidates.append((self.x, self.y + 1))
         if self.x - 1 >= 0: candidates.append((self.x - 1, self.y))
         if self.x + 1 < W:  candidates.append((self.x + 1, self.y))
+        
+        # Filter candidates for collision BEFORE scoring
+        candidates = [c for c in candidates if self.is_clear(c[0], c[1], all_robots, COLLISION_RADIUS)]
         
         random.shuffle(candidates)
         if not candidates: return (self.x, self.y)
@@ -122,12 +141,14 @@ class Robot:
             
             dx, dy = getattr(self, "_escape_dir", (0, 0))
             tx, ty = self.x + dx, self.y + dy
-            if 0 <= tx < W and 0 <= ty < H:
+            
+            # Check collision for escape move
+            if 0 <= tx < W and 0 <= ty < H and self.is_clear(tx, ty, all_robots, COLLISION_RADIUS):
                 self._escape_steps -= 1
                 return (tx, ty)
             else:
                 self._escape_steps = 0
-                return random.choice(candidates)
+                return random.choice(candidates) # candidates already collision checked
         
         if hasattr(self, "_escape_steps"): self._escape_steps = 0
         return best['move']
@@ -135,7 +156,7 @@ class Robot:
     # ---------------------------------------------------------
     # 2. FOLLOW MODE (Vector Center-of-Gravity + Taboo)
     # ---------------------------------------------------------
-    def choose_move_follow(self, pher_attr: np.ndarray) -> Tuple[int, int]:
+    def choose_move_follow(self, pher_attr: np.ndarray, all_robots: List['Robot']) -> Tuple[int, int]:
         H, W = pher_attr.shape
         R = 5  # Sensor radius
         
@@ -192,11 +213,15 @@ class Robot:
             if (nx, ny) in self.follow_history:
                 continue
 
-            # 2. Alignment Score (Dot product)
+            # 2. COLLISION CHECK: Don't move if blocked
+            if not self.is_clear(nx, ny, all_robots, COLLISION_RADIUS):
+                continue
+
+            # 3. Alignment Score (Dot product)
             # How well does this move align with the Pheromone Vector?
             alignment = (dx * vec_x) + (dy * vec_y)
             
-            # 3. Intensity Bonus (Greedy secondary check)
+            # 4. Intensity Bonus (Greedy secondary check)
             # Slightly prefer cells that are brighter themselves
             intensity = pher_attr[ny, nx]
             
@@ -206,16 +231,17 @@ class Robot:
                 best_score = score
                 best_move = (nx, ny)
         
-        # If all moves are taboo (stuck in a corner/loop), reset history and pick random valid
+        # If all moves are taboo/blocked
         if best_move is None:
             self.follow_history.clear()
-            # Just pick the brightest neighbor as fallback
+            # Just pick the brightest neighbor as fallback, ensuring collision safety
             max_p = -1
             fallback = (self.x, self.y)
             for (dx, dy, nx, ny) in candidates:
-                 if pher_attr[ny, nx] > max_p:
-                     max_p = pher_attr[ny, nx]
-                     fallback = (nx, ny)
+                 if self.is_clear(nx, ny, all_robots, COLLISION_RADIUS): # Check safety
+                     if pher_attr[ny, nx] > max_p:
+                         max_p = pher_attr[ny, nx]
+                         fallback = (nx, ny)
             return fallback
 
         # Log history
@@ -260,7 +286,7 @@ class Robot:
     # ---------------------------------------------------------
     # 4. STEP
     # ---------------------------------------------------------
-    def step(self, pher_rep: np.ndarray, pher_attr: np.ndarray, targets: Set[Tuple[int,int]]):
+    def step(self, pher_rep: np.ndarray, pher_attr: np.ndarray, targets: Set[Tuple[int,int]], all_robots: List['Robot']):
         H, W = pher_rep.shape
 
         # A. TARGET SENSING & OVERRIDE
@@ -273,8 +299,6 @@ class Robot:
 
                 self.mode = "ADVERTISE"
                 self.advertising_target = (self.x, self.y)
-                # Use Gap=2 for 2 empty cells between arms
-                self.spiral_iter = sparse_spiral_generator(gap=4)
                 self.deposit_distance_signal(pher_attr, r=5)
                 print(f"Robot {self.id} ACTIVATED target at {(self.x, self.y)}")
 
@@ -295,24 +319,31 @@ class Robot:
                     if random.random() < 0.5: dx = 0
                     else: dy = 0
                 nx, ny = self.x + dx, self.y + dy
-                if 0 <= nx < W and 0 <= ny < H:
+                
+                # Check collision for Target Approach
+                if 0 <= nx < W and 0 <= ny < H and self.is_clear(nx, ny, all_robots, COLLISION_RADIUS):
                     self.x, self.y = nx, ny
                 return
 
         # B. EXECUTE MODE
         if self.mode == "ADVERTISE":
-            if self.spiral_iter is None: self.spiral_iter = sparse_spiral_generator(gap=4)
-            try:
-                dx, dy = next(self.spiral_iter)
-            except:
-                self.spiral_iter = sparse_spiral_generator(gap=4)
-                dx, dy = next(self.spiral_iter)
-            
-            nx, ny = self.x + dx, self.y + dy
-            if 0 <= nx < W and 0 <= ny < H:
-                self.x, self.y = nx, ny
-            
-            self.deposit_distance_signal(pher_attr, r=5)
+            if self.x == self.start_x and self.y == self.start_y:
+                pass 
+            else:
+                dx = np.sign(self.start_x - self.x)
+                dy = np.sign(self.start_y - self.y)
+                
+                # Simple grid move logic
+                nx, ny = self.x + dx, self.y + dy
+                
+                # Check collision before moving
+                if 0 <= nx < W and 0 <= ny < H:
+                    if self.is_clear(nx, ny, all_robots, COLLISION_RADIUS):
+                        self.x, self.y = nx, ny
+                        self.deposit_distance_signal(pher_attr, r=5)
+                    else:
+                        # Blocked? Stay put this turn.
+                        pass
         
         elif self.mode == "SEARCH":
             found_trail = False
@@ -329,17 +360,16 @@ class Robot:
 
             if found_trail:
                 self.mode = "FOLLOW"
-                # Clear history when entering follow mode to start fresh
                 self.follow_history.clear() 
-                nx, ny = self.choose_move_follow(pher_attr)
+                nx, ny = self.choose_move_follow(pher_attr, all_robots)
                 self.x, self.y = nx, ny
             else:
-                nx, ny = self.choose_move_search(pher_rep, pher_attr)
+                nx, ny = self.choose_move_search(pher_rep, pher_attr, all_robots)
                 self.x, self.y = nx, ny
                 self.deposit_repulsive(pher_rep, amount=PHER_DEPOSIT, r=5)
 
         elif self.mode == "FOLLOW":
-            nx, ny = self.choose_move_follow(pher_attr)
+            nx, ny = self.choose_move_follow(pher_attr, all_robots)
             
             if nx == self.x and ny == self.y:
                 if (nx, ny) not in targets:
@@ -357,7 +387,6 @@ class Robot:
                 
                 self.mode = "ADVERTISE"
                 self.advertising_target = (self.x, self.y)
-                self.spiral_iter = sparse_spiral_generator(gap=4)
                 self.deposit_distance_signal(pher_attr, r=5)
                 print(f"Robot {self.id} found target at {(self.x, self.y)}")
 
@@ -376,7 +405,6 @@ def combined_pheromone_to_rgba(p_rep: np.ndarray, p_attr: np.ndarray) -> np.ndar
     max_rep = np.percentile(p_rep, 98) if np.max(p_rep) > 0 else 1.0
     norm_rep = np.clip(p_rep / (max_rep + 1e-9), 0, 1) * 0.5
     
-    # Scale Blue relative to max distance signal (10.0)
     norm_attr = np.clip(p_attr / 10.0, 0, 1) * 0.9
     
     rgba[..., 0] = norm_rep * 1.0 
@@ -396,7 +424,8 @@ def sim_step():
 
     decay = np.exp(-1.0 / TAU_DECAY)
     pher_repulse *= decay
-    pher_attract *= decay
+    # pher_attract *= decay # Disabled for Advertise logic persistence
+    
     pher_repulse[pher_repulse < 1e-5] = 0.0
     pher_attract[pher_attract < 1e-5] = 0.0
 
@@ -406,7 +435,8 @@ def sim_step():
         discover_vn(r.x, r.y, targets, found_targets, W, H)
 
     for r in robots:
-        r.step(pher_repulse, pher_attract, targets)
+        # Pass all robots list to checking for collisions
+        r.step(pher_repulse, pher_attract, targets, robots)
         
     all_targets_satisfied = False
     if len(targets) > 0:
@@ -490,6 +520,7 @@ if __name__ == "__main__":
     RANDOM_SEED = 42
     STEPS_PER_FRAME = 5
     INTERVAL_MS = 50
+    COLLISION_RADIUS = 1 # 1 = 3x3 block safe, 2 = 5x5 block safe
     
     OUTPUT_DIR = Path("output_frames/stigmergy_rendezvous/")
     metrics_log = [] 
@@ -504,10 +535,16 @@ if __name__ == "__main__":
     W = H = GRID_SIZE
     global_step = 0
     
-    # pts = rng.random((N_ROBOTS, 2)) * np.array([W, H])
-    # print(pts)
     pts = np.array([[10, 10], [90, 90]])
-    robots = [Robot(i, int(pts[i, 0]), int(pts[i,1]), local_covered=np.zeros((H, W), dtype=bool)) for i in range(N_ROBOTS)]
+    
+    robots = [Robot(
+        i, 
+        int(pts[i, 0]), 
+        int(pts[i,1]), 
+        local_covered=np.zeros((H, W), dtype=bool),
+        start_x=int(pts[i, 0]),
+        start_y=int(pts[i,1])
+    ) for i in range(N_ROBOTS)]
 
     targets = {(50, 50)}
     found_targets = set()
