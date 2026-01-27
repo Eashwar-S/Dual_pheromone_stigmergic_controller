@@ -61,6 +61,9 @@ class Robot:
     x: int
     y: int
     local_covered: np.ndarray
+    # NEW: Store start position to return to
+    start_x: int 
+    start_y: int
     mode: str = "SEARCH"
     spiral_iter: Optional[object] = None
     visited_targets: Set[Tuple[int,int]] = field(default_factory=set)
@@ -73,7 +76,7 @@ class Robot:
     # 1. SEARCH MODE
     # ---------------------------------------------------------
     def calculate_utility(self, n_new_global, n_new_local, pher_sum):
-        KAPPA = 200.0
+        KAPPA = 20.0
         SIGMA = 10.0
         term1 = float(n_new_global)
         term2 = float(n_new_local) / KAPPA
@@ -273,8 +276,7 @@ class Robot:
 
                 self.mode = "ADVERTISE"
                 self.advertising_target = (self.x, self.y)
-                # Use Gap=2 for 2 empty cells between arms
-                self.spiral_iter = sparse_spiral_generator(gap=4)
+                # MODIFIED: No spiral setup needed, we just move to start in B.
                 self.deposit_distance_signal(pher_attr, r=5)
                 print(f"Robot {self.id} ACTIVATED target at {(self.x, self.y)}")
 
@@ -301,18 +303,28 @@ class Robot:
 
         # B. EXECUTE MODE
         if self.mode == "ADVERTISE":
-            if self.spiral_iter is None: self.spiral_iter = sparse_spiral_generator(gap=4)
-            try:
-                dx, dy = next(self.spiral_iter)
-            except:
-                self.spiral_iter = sparse_spiral_generator(gap=4)
-                dx, dy = next(self.spiral_iter)
+            # MODIFIED LOGIC: Return to initial position directly
             
-            nx, ny = self.x + dx, self.y + dy
-            if 0 <= nx < W and 0 <= ny < H:
-                self.x, self.y = nx, ny
-            
-            self.deposit_distance_signal(pher_attr, r=5)
+            # Check if we are at start position
+            if self.x == self.start_x and self.y == self.start_y:
+                # Arrived at start, stay here.
+                pass 
+            else:
+                # Move towards start
+                dx = np.sign(self.start_x - self.x)
+                dy = np.sign(self.start_y - self.y)
+                
+                # If diagonal, pick one axis to move along to adhere to grid movement (or move diagonal)
+                # Standard grid logic often allows diagonal or requires Manhattan. 
+                # Let's simple check grid bounds and move.
+                nx, ny = self.x + dx, self.y + dy
+                if 0 <= nx < W and 0 <= ny < H:
+                    self.x, self.y = nx, ny
+                
+                # Deposit pheromone at new location
+                # Since we are moving away from target, deposit_distance_signal (based on dist to target)
+                # will naturally create the decreasing gradient requested.
+                self.deposit_distance_signal(pher_attr, r=5)
         
         elif self.mode == "SEARCH":
             found_trail = False
@@ -357,7 +369,7 @@ class Robot:
                 
                 self.mode = "ADVERTISE"
                 self.advertising_target = (self.x, self.y)
-                self.spiral_iter = sparse_spiral_generator(gap=4)
+                # MODIFIED: No spiral, just ensure signal deposited
                 self.deposit_distance_signal(pher_attr, r=5)
                 print(f"Robot {self.id} found target at {(self.x, self.y)}")
 
@@ -396,7 +408,12 @@ def sim_step():
 
     decay = np.exp(-1.0 / TAU_DECAY)
     pher_repulse *= decay
-    pher_attract *= decay
+    
+    # MODIFIED: Attractive pheromone should NOT evaporate in advertise stage
+    # (Since simulation runs mixed modes, we disable global decay for attraction 
+    # to preserve the gradient trail built by the advertiser).
+    # pher_attract *= decay 
+    
     pher_repulse[pher_repulse < 1e-5] = 0.0
     pher_attract[pher_attract < 1e-5] = 0.0
 
@@ -507,7 +524,16 @@ if __name__ == "__main__":
     # pts = rng.random((N_ROBOTS, 2)) * np.array([W, H])
     # print(pts)
     pts = np.array([[10, 10], [90, 90]])
-    robots = [Robot(i, int(pts[i, 0]), int(pts[i,1]), local_covered=np.zeros((H, W), dtype=bool)) for i in range(N_ROBOTS)]
+    
+    # MODIFIED: Pass start_x and start_y to the Robot constructor
+    robots = [Robot(
+        i, 
+        int(pts[i, 0]), 
+        int(pts[i,1]), 
+        local_covered=np.zeros((H, W), dtype=bool),
+        start_x=int(pts[i, 0]),
+        start_y=int(pts[i,1])
+    ) for i in range(N_ROBOTS)]
 
     targets = {(50, 50)}
     found_targets = set()
