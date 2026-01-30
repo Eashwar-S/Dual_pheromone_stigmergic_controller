@@ -65,15 +65,6 @@ def lloyd_balanced(points: np.ndarray, k: int,
     labels, _ = balanced_power_diagram_assign(points, centers, target, max_iters_assign, step0, decay, rng)
     return labels, centers
 
-# def mark_visible(covered: np.ndarray, x: int, y: int):
-#     """Mark current cell and its von Neumann neighbors as covered."""
-#     H, W = covered.shape
-#     covered[y, x] = True
-#     if y - 1 >= 0: covered[y - 1, x] = True
-#     if y + 1 < H:  covered[y + 1, x] = True
-#     if x - 1 >= 0: covered[y, x - 1] = True
-#     if x + 1 < W:  covered[y, x + 1] = True
-
 def mark_visible(grid_bool: np.ndarray, x: int, y: int, r: int = 5):
     H, W = grid_bool.shape
     for dy in range(-r, r+1):

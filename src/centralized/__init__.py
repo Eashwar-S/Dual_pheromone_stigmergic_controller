@@ -1,0 +1,1 @@
+"""Centralized approach components."""
