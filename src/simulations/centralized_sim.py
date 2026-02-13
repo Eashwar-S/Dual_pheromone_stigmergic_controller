@@ -3,16 +3,16 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Set, Tuple
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from simulation import FrameWriter, compute_fps, make_writer, run_animation
-from src.refactor.common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
-from src.refactor.common.geometry import manhattan_path
-from src.refactor.common.visualization import (coverage_to_image, region_colors, 
-                                                draw_voronoi_borders, save_targets_over_time_plot)
-from src.refactor.centralized.partitioning import lloyd_balanced
-from src.refactor.centralized.path_planning import sensor_aware_path_for_region
-from src.refactor.centralized.robot import Robot
+from src.common.simulation import FrameWriter, compute_fps, make_writer, run_animation
+from src.common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
+from src.common.geometry import manhattan_path
+from src.common.visualization import (coverage_to_image, region_colors, 
+                                                   draw_voronoi_borders, save_targets_over_time_plot)
+from src.centralized.partitioning import lloyd_balanced
+from src.centralized.path_planning import sensor_aware_path_for_region
+from src.centralized.robot import Robot
 
 
 def maybe_trigger_failure(global_step, fail_at_step, fail_robot_id, robots, failure_triggered):
@@ -79,7 +79,7 @@ def sim_step(robots, covered, targets, found_targets, W, H, global_step, fail_at
     
     for r in robots:
         x, y = r.pos
-        mark_visible(covered, x, y)
+        mark_visible(covered, x, y, r=5)
         discover_targets_in_vnhood(x, y, targets, found_targets, W, H)
     
     for r in robots:
@@ -87,7 +87,7 @@ def sim_step(robots, covered, targets, found_targets, W, H, global_step, fail_at
     
     for r in robots:
         x, y = r.pos
-        mark_visible(covered, x, y)
+        mark_visible(covered, x, y, r=5)
         discover_targets_in_vnhood(x, y, targets, found_targets, W, H)
     
     failure_reallocated = maybe_reallocate_failed_path(robots, fail_robot_id, failure_triggered, 
@@ -178,12 +178,13 @@ def update(frame, robots, covered, targets, found_targets, W, H, global_step, fa
 
 
 if __name__ == "__main__":
-    GRID_SIZE = 200
+    GRID_SIZE = 100
     N_ROBOTS = 10
     N_TARGETS = 5
     STEPS_PER_FRAME = 10
     INTERVAL_MS = 50
     RANDOM_SEED = 7
+    ROBOT_RADIUS = 5
     
     targets_found_over_time = []
     plot_saved = False
@@ -216,7 +217,7 @@ if __name__ == "__main__":
     masks = [(zones == i) for i in range(N_ROBOTS)]
     sweeping_paths = []
     for i in range(N_ROBOTS):
-        p = sensor_aware_path_for_region(masks[i])
+        p = sensor_aware_path_for_region(masks[i], robot_radius=ROBOT_RADIUS)
         if not p:
             cx, cy = centers[i]
             x = int(np.clip(round(cx - 0.5), 0, W - 1))

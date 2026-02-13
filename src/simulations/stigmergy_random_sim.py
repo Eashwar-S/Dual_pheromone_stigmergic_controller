@@ -3,13 +3,13 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Set, Tuple
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from simulation import FrameWriter, compute_fps, make_writer, run_animation
-from src.refactor.common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
-from src.refactor.common.visualization import coverage_to_image, pheromone_to_rgba, save_targets_over_time_plot
-from src.refactor.stigmergy.pheromone import apply_decay
-from src.refactor.stigmergy.robot_random import Robot
+from src.common.simulation import FrameWriter, compute_fps, make_writer, run_animation
+from src.common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
+from src.common.visualization import coverage_to_image, pheromone_to_rgba, save_targets_over_time_plot
+from src.stigmergy.pheromone import apply_decay
+from src.stigmergy.robot_random import Robot
 
 
 def maybe_trigger_failure(global_step, fail_at_step, fail_robot_id, robots, failure_triggered):
@@ -24,7 +24,7 @@ def maybe_trigger_failure(global_step, fail_at_step, fail_robot_id, robots, fail
 
 def sim_step(robots, pher, covered_global, targets, found_targets, W, H, tau_decay, pher_min,
              pher_deposit, bias_alpha, uncovered_bonus, rng, global_step, fail_at_step,
-             fail_robot_id, failure_triggered, targets_found_over_time):
+             fail_robot_id, failure_triggered, targets_found_over_time, collision_radius):
     """Execute one simulation step."""
     failure_triggered = maybe_trigger_failure(global_step, fail_at_step, fail_robot_id, robots, failure_triggered)
     
@@ -37,7 +37,7 @@ def sim_step(robots, pher, covered_global, targets, found_targets, W, H, tau_dec
         r.deposit_pheromone(pher, pher_deposit, r=5)
     
     for r in robots:
-        r.step(pher, bias_alpha, uncovered_bonus, rng)
+        r.step(pher, bias_alpha, uncovered_bonus, rng, robots, collision_radius)
     
     for r in robots:
         mark_visible(r.local_covered, r.x, r.y)
@@ -59,13 +59,13 @@ def update(frame, robots, pher, covered_global, targets, found_targets, W, H, ta
            pher_deposit, bias_alpha, uncovered_bonus, rng, global_step, fail_at_step,
            fail_robot_id, failure_triggered, targets_found_over_time, world_cov_img, world_pher_img,
            robot_scat, robot_labels, obs_pher_img, disc_plot, und_plot, ax_world, fig,
-           frame_writer, steps_per_frame, output_dir, plot_saved, state_dict):
+           frame_writer, steps_per_frame, output_dir, plot_saved, collision_radius, state_dict):
     """Animation update function."""
     for _ in range(steps_per_frame):
         global_step, failure_triggered = sim_step(
             robots, pher, covered_global, targets, found_targets, W, H, tau_decay, pher_min,
             pher_deposit, bias_alpha, uncovered_bonus, rng, global_step, fail_at_step,
-            fail_robot_id, failure_triggered, targets_found_over_time
+            fail_robot_id, failure_triggered, targets_found_over_time, collision_radius
         )
     
     state_dict['global_step'] = global_step
@@ -118,7 +118,7 @@ def update(frame, robots, pher, covered_global, targets, found_targets, W, H, ta
 
 
 if __name__ == "__main__":
-    GRID_SIZE = 200
+    GRID_SIZE = 100
     N_ROBOTS = 10
     N_TARGETS = 5
     RANDOM_SEED = 7
@@ -139,6 +139,7 @@ if __name__ == "__main__":
     PHER_MIN = 1e-6
     BIAS_ALPHA = 250
     UNCOVERED_BONUS = 10.0
+    COLLISION_RADIUS = 1  # 1 = 3x3 block safe zone
     rng = np.random.default_rng(RANDOM_SEED)
     
     FPS = compute_fps(INTERVAL_MS)
@@ -226,7 +227,7 @@ if __name__ == "__main__":
                      PHER_DEPOSIT, BIAS_ALPHA, UNCOVERED_BONUS, rng, state_dict['global_step'], FAIL_AT_STEP,
                      FAIL_ROBOT_ID, state_dict['failure_triggered'], targets_found_over_time, world_cov_img, world_pher_img,
                      robot_scat, robot_labels, obs_pher_img, disc_plot, und_plot, ax_world, fig,
-                     frame_writer, STEPS_PER_FRAME, OUTPUT_DIR, state_dict['plot_saved'], state_dict)
+                     frame_writer, STEPS_PER_FRAME, OUTPUT_DIR, state_dict['plot_saved'], COLLISION_RADIUS, state_dict)
     
     anim = run_animation(fig, update_wrapper, frames=2000, interval_ms=INTERVAL_MS, blit=False)
     plt.show()
