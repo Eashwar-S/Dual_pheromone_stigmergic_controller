@@ -208,5 +208,6 @@ __marimo__/
 
 
 # ignore all .png output files
-output_frames/centralized_approach/*.png
-output_frames/stigmergy_random_walk/*.png
+output_frames/*
+src/simulations/output_frames/*
+

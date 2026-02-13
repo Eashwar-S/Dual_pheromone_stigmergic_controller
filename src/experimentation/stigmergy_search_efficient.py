@@ -6,15 +6,15 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
-from src.stigmergy.pheromone import deposit_uniform, apply_decay
-from src.stigmergy.robot_random import Robot
+from src.stigmergy.pheromone import apply_decay
+from src.stigmergy.robot_efficient import Robot
 from src.experimentation import config
 
 
 def run_simulation(grid_size: int, n_robots: int, n_targets: int,
                    failure_schedule: List[Tuple[int, int]], rng_seed: int,
                    robot_radius: int = 5) -> Dict[str, object]:
-    """Run headless stigmergy random walk simulation and return comprehensive metrics."""
+    """Run headless stigmergy search simulation and return comprehensive metrics."""
     rng = np.random.default_rng(rng_seed)
     W = H = grid_size
     max_horizon = config.calculate_horizon(grid_size, n_robots)
@@ -22,10 +22,9 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     PHER_DEPOSIT = 1.0
     TAU_DECAY = 200.0
     PHER_MIN = 1e-6
-    BIAS_ALPHA = 0.5
-    UNCOVERED_BONUS = 2.0
-    COLLISION_RADIUS = 1  # 1 = 3x3 block safe zone
+    COLLISION_RADIUS = 1  # 1 = 3x3 block safe
     
+    # Initialize robots at random positions
     start_positions = []
     for i in range(n_robots):
         x = rng.integers(0, W)
@@ -44,6 +43,7 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     covered = np.zeros((H, W), dtype=int)
     pheromone = np.zeros((H, W), dtype=float)
     
+    # Process failure schedule
     norm_sched: List[Tuple[int, int]] = []
     for rid, st in (failure_schedule or []):
         if 0 <= rid < n_robots and st is not None and st >= 0:
@@ -62,25 +62,31 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     
     steps = 0
     while steps < max_horizon:
+        # Apply pheromone decay
         apply_decay(pheromone, TAU_DECAY, PHER_MIN)
         
+        # Handle failures
         if steps in fail_map:
             for rid in fail_map[steps]:
                 r = robots[rid]
                 if not r.failed:
                     r.failed = True
         
+        # Pre-move sensing
         for r in robots:
             if not r.failed:
                 mark_visible(r.local_covered, r.x, r.y, robot_radius)
                 mark_visible(covered, r.x, r.y, robot_radius)
                 discover_targets_in_vnhood(r.x, r.y, targets, found_targets, W, H, robot_radius)
         
+        # Execute moves
         for r in robots:
             if not r.failed:
-                r.step(pheromone, BIAS_ALPHA, UNCOVERED_BONUS, rng, robots, COLLISION_RADIUS)
-                deposit_uniform(pheromone, r.x, r.y, PHER_DEPOSIT, r=robot_radius)
+                r.step(pheromone, robots, robot_radius, COLLISION_RADIUS)
+                # Deposit pheromone after moving
+                r.deposit_pheromone(pheromone, PHER_DEPOSIT, robot_radius)
         
+        # Post-move sensing
         for r in robots:
             if not r.failed:
                 mark_visible(r.local_covered, r.x, r.y, robot_radius)
@@ -89,6 +95,7 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
         
         steps += 1
         
+        # Calculate metrics
         current_coverage = np.sum(covered > 0)
         coverage_fraction = current_coverage / total_cells
         targets_fraction = len(found_targets) / len(targets) if len(targets) > 0 else 1.0
@@ -96,12 +103,14 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
         auc_cov += coverage_fraction
         auc_found += targets_fraction
         
+        # Track completion times
         if len(found_targets) >= len(targets) and t_targets == max_horizon:
             t_targets = steps
         
         if current_coverage >= total_cells and t_coverage == max_horizon:
             t_coverage = steps
         
+        # Early termination if both objectives met
         if t_targets < max_horizon and t_coverage < max_horizon:
             break
     
@@ -139,7 +148,7 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
 
 def run_experiments():
     """Run all experiments and save results to Excel."""
-    output_path = config.get_output_path("stigmergy_random")
+    output_path = config.get_output_path("stigmergy_search_efficient")
     xlsx_path = output_path / "results.xlsx"
     
     rows: List[Dict[str, object]] = []

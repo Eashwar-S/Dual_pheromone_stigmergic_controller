@@ -4,13 +4,13 @@ from pathlib import Path
 from typing import Set, Tuple, Dict
 from collections import deque
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from simulation import FrameWriter, compute_fps, run_animation
-from src.refactor.common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
-from src.refactor.common.visualization import coverage_to_image, combined_pheromone_to_rgba
-from src.refactor.stigmergy.pheromone import apply_decay
-from src.refactor.stigmergy.robot_spiral import Robot
+from src.common.simulation import FrameWriter, compute_fps, run_animation
+from src.common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
+from src.common.visualization import coverage_to_image, combined_pheromone_to_rgba
+from src.stigmergy.pheromone import apply_decay
+from src.stigmergy.robot_spiral import Robot
 
 
 def sim_step(robots, pher_repulse, pher_attract, covered_global, targets, found_targets,

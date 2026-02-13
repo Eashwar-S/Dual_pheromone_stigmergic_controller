@@ -56,7 +56,7 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     masks = [(zones == i) for i in range(n_robots)]
     sweeping_paths: List[List[Tuple[int, int]]] = []
     for i in range(n_robots):
-        p = sensor_aware_path_for_region(masks[i])
+        p = sensor_aware_path_for_region(masks[i], robot_radius=robot_radius)
         if not p:
             cx, cy = centers[i]
             x = int(np.clip(round(cx - 0.5), 0, W - 1))
@@ -195,7 +195,7 @@ def run_experiments():
         failure_schedule = config.make_random_failure_schedule(n_robots, n_failures, rng_sched, max_horizon)
         
         for run_idx in range(1, config.RUNS_PER_SCENARIO + 1):
-            run_seed = schedule_seed + run_idx
+            run_seed = schedule_seed #+ run_idx
             
             print(f"Running: grid={grid_size}, robots={n_robots}, targets={n_targets}, failures={n_failures}, run={run_idx}")
             
