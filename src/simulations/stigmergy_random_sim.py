@@ -147,8 +147,15 @@ if __name__ == "__main__":
     frame_writer = FrameWriter("output_frames/stigmergy_random_walk/")
     
     W = H = GRID_SIZE
-    pts = rng.random((N_ROBOTS, 2)) * np.array([W, H])
-    robots = [Robot(i, int(pts[i, 0]), int(pts[i, 1]), local_covered=np.zeros((H, W), dtype=bool)) 
+    
+    # Generate random starting positions for robots
+    start_positions = []
+    for i in range(N_ROBOTS):
+        x = rng.integers(0, W)
+        y = rng.integers(0, H)
+        start_positions.append((x, y))
+    
+    robots = [Robot(i, start_positions[i][0], start_positions[i][1], local_covered=np.zeros((H, W), dtype=bool)) 
               for i in range(N_ROBOTS)]
     
     targets = generate_unique_targets(GRID_SIZE, N_TARGETS, rng)

@@ -73,22 +73,23 @@ def maybe_reallocate_failed_path(robots, fail_robot_id, failure_triggered, failu
 
 
 def sim_step(robots, covered, targets, found_targets, W, H, global_step, fail_at_step, 
-             fail_robot_id, failure_triggered, failure_reallocated, targets_found_over_time, remaining_scatters):
+             fail_robot_id, failure_triggered, failure_reallocated, targets_found_over_time, 
+             remaining_scatters, collision_radius):
     """Execute one simulation step."""
     failure_triggered = maybe_trigger_failure(global_step, fail_at_step, fail_robot_id, robots, failure_triggered)
     
     for r in robots:
         x, y = r.pos
-        mark_visible(covered, x, y, r=5)
-        discover_targets_in_vnhood(x, y, targets, found_targets, W, H)
+        mark_visible(covered, x, y, r=ROBOT_RADIUS)
+        discover_targets_in_vnhood(x, y, targets, found_targets, W, H, r=ROBOT_RADIUS)
     
     for r in robots:
-        r.step()
+        r.step(robots, collision_radius)
     
     for r in robots:
         x, y = r.pos
-        mark_visible(covered, x, y, r=5)
-        discover_targets_in_vnhood(x, y, targets, found_targets, W, H)
+        mark_visible(covered, x, y, r=ROBOT_RADIUS)
+        discover_targets_in_vnhood(x, y, targets, found_targets, W, H, r=ROBOT_RADIUS)
     
     failure_reallocated = maybe_reallocate_failed_path(robots, fail_robot_id, failure_triggered, 
                                                         failure_reallocated, remaining_scatters)
@@ -107,12 +108,13 @@ def update(frame, robots, covered, targets, found_targets, W, H, global_step, fa
            fail_robot_id, failure_triggered, failure_reallocated, targets_found_over_time,
            remaining_scatters, visited_scatters, world_img, shared_img, robot_scatter,
            robot_labels, disc_plot, und_plot, ax_world, fig, frame_writer, steps_per_frame,
-           output_dir, plot_saved, state_dict):
+           output_dir, plot_saved, collision_radius, state_dict):
     """Animation update function."""
     for _ in range(steps_per_frame):
         global_step, failure_triggered, failure_reallocated = sim_step(
             robots, covered, targets, found_targets, W, H, global_step, fail_at_step,
-            fail_robot_id, failure_triggered, failure_reallocated, targets_found_over_time, remaining_scatters
+            fail_robot_id, failure_triggered, failure_reallocated, targets_found_over_time, 
+            remaining_scatters, collision_radius
         )
     
     state_dict['global_step'] = global_step
@@ -166,9 +168,9 @@ def update(frame, robots, covered, targets, found_targets, W, H, global_step, fa
         save_targets_over_time_plot(output_dir / "targets_over_time.png", targets_found_over_time)
         
         if fail_robot_id is not None:
-            np.save('output_metrics/centralized_approach_with_failure.npy', np.array(targets_found_over_time))
+            np.save(f'{output_dir}/centralized_approach_with_failure.npy', np.array(targets_found_over_time))
         else:
-            np.save('output_metrics/centralized_approach_without_failure.npy', np.array(targets_found_over_time))
+            np.save(f'{output_dir}/centralized_approach_without_failure.npy', np.array(targets_found_over_time))
         plot_saved = True
         state_dict['plot_saved'] = plot_saved
     
@@ -178,13 +180,14 @@ def update(frame, robots, covered, targets, found_targets, W, H, global_step, fa
 
 
 if __name__ == "__main__":
-    GRID_SIZE = 100
-    N_ROBOTS = 10
-    N_TARGETS = 5
-    STEPS_PER_FRAME = 10
+    GRID_SIZE = 300
+    N_ROBOTS = 15
+    N_TARGETS = 60
+    STEPS_PER_FRAME = 5
     INTERVAL_MS = 50
-    RANDOM_SEED = 7
+    RANDOM_SEED = 42
     ROBOT_RADIUS = 5
+    COLLISION_RADIUS = 0  # 1 = 3x3 block safe zone
     
     targets_found_over_time = []
     plot_saved = False
@@ -225,15 +228,23 @@ if __name__ == "__main__":
             p = [(x, y)]
         sweeping_paths.append(p)
     
-    center_pos = (W // 2, H // 2)
+    # Generate random starting positions for robots
+    start_positions = []
+    for i in range(N_ROBOTS):
+        x = rng.integers(0, W)
+        y = rng.integers(0, H)
+        start_positions.append((x, y))
+    
+    # Build full paths: random start -> navigate to sweep path start -> sweep path
     full_paths = []
     for i in range(N_ROBOTS):
         sweeping_path = sweeping_paths[i]
+        start_pos = start_positions[i]
         if sweeping_path:
-            nav_path = manhattan_path(center_pos, sweeping_path[0])
+            nav_path = manhattan_path(start_pos, sweeping_path[0])
             full_path = nav_path[:-1] + sweeping_path
         else:
-            full_path = [center_pos]
+            full_path = [start_pos]
         full_paths.append(full_path)
     
     robots = [Robot(i, full_paths[i]) for i in range(N_ROBOTS)]
@@ -325,7 +336,7 @@ if __name__ == "__main__":
                      FAIL_ROBOT_ID, state_dict['failure_triggered'], state_dict['failure_reallocated'], 
                      targets_found_over_time, remaining_scatters, visited_scatters, world_img, shared_img, 
                      robot_scatter, robot_labels, disc_plot, und_plot, ax_world, fig, frame_writer, 
-                     STEPS_PER_FRAME, OUTPUT_DIR, state_dict['plot_saved'], state_dict)
+                     STEPS_PER_FRAME, OUTPUT_DIR, state_dict['plot_saved'], COLLISION_RADIUS, state_dict)
     
     anim = run_animation(fig, update_wrapper, frames=2000000, interval_ms=INTERVAL_MS, blit=False)
     plt.show()

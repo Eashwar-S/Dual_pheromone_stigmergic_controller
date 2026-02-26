@@ -3,16 +3,18 @@ from typing import List, Tuple
 from pathlib import Path
 
 
-ROBOT_RADIUS = 5
+ROBOT_RADIUS = 3
 KAPPA = 10.0
 BASE_SEED = 42
 RUNS_PER_SCENARIO = 5
 
-GRID_SIZES = [50, 100, 150, 200, 250]
-ROBOT_COUNTS = [5, 10, 15, 20, 25]
-TARGET_COUNTS = [15, 20, 35, 50, 75]
-FAILURE_COUNTS = [0, 0, 0, 0, 0, 0]
-# FAILURE_COUNTS = [0, 1, 2, 4]
+GRID_SIZES = [100, 200, 300, 400, 500]
+ROBOT_COUNTS = [5, 8, 10, 12, 15]
+TARGET_COUNTS = [20, 40, 60, 80, 100]
+FAILURE_COUNTS = [0, 0, 0, 0, 0]
+
+# Uncomment to run E2 with failures
+# FAILURE_COUNTS = [2, 5, 7, 9, 11]
 
 EXPERIMENT_RESULTS_DIR = Path(__file__).parent / "experiment_results"
 
@@ -53,7 +55,7 @@ def make_random_failure_schedule(n_robots: int, n_failures: int,
     
     robot_ids = rng.choice(n_robots, size=n_fail, replace=False)
     lo = 5
-    hi = max(6, int(max_horizon * 0.4))
+    hi = max(6, 300)
     steps = rng.integers(low=lo, high=hi, size=n_fail)
     
     return [(int(rid), int(st)) for rid, st in zip(robot_ids, steps)]
@@ -75,6 +77,26 @@ def get_experiment_configs():
             FAILURE_COUNTS[i]
         ))
     return configs
+
+
+def generate_robot_positions(grid_size: int, n_robots: int, rng: np.random.Generator) -> List[Tuple[int, int]]:
+    """
+    Generate random starting positions for robots.
+    
+    Args:
+        grid_size: Grid dimension (grid_size x grid_size)
+        n_robots: Number of robots
+        rng: Random number generator
+    
+    Returns:
+        List of (x, y) starting positions
+    """
+    positions = []
+    for i in range(n_robots):
+        x = rng.integers(0, grid_size)
+        y = rng.integers(0, grid_size)
+        positions.append((x, y))
+    return positions
 
 
 def get_output_path(approach: str) -> Path:

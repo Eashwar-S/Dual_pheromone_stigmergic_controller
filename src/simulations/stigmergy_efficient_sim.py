@@ -191,7 +191,7 @@ if __name__ == "__main__":
     # Initialize grid
     W = H = GRID_SIZE
     
-    # Initialize robots at random positions
+    # Generate random starting positions for robots
     start_positions = []
     for i in range(N_ROBOTS):
         x = rng.integers(0, W)
