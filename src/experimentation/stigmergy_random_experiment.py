@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
+from src.common.communication_tracker import CommunicationTracker
 from src.stigmergy.pheromone import deposit_uniform, apply_decay
 from src.stigmergy.robot_random import Robot
 from src.experimentation import config
@@ -24,13 +25,10 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     PHER_MIN = 1e-6
     BIAS_ALPHA = 0.5
     UNCOVERED_BONUS = 2.0
-    COLLISION_RADIUS = 1  # 1 = 3x3 block safe zone
+    COLLISION_RADIUS = 0  # 1 = 3x3 block safe zone
     
-    start_positions = []
-    for i in range(n_robots):
-        x = rng.integers(0, W)
-        y = rng.integers(0, H)
-        start_positions.append((x, y))
+    # Generate random starting positions for robots
+    start_positions = config.generate_robot_positions(grid_size, n_robots, rng)
     
     robots = [Robot(
         i,
@@ -56,6 +54,9 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     t_targets = max_horizon
     t_coverage = max_horizon
     total_cells = H * W
+    
+    # Initialize communication tracker (stigmergy has no communication)
+    comm_tracker = CommunicationTracker(message_size_bytes=5)
     
     auc_cov = 0.0
     auc_found = 0.0
@@ -87,6 +88,9 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
                 mark_visible(covered, r.x, r.y, robot_radius)
                 discover_targets_in_vnhood(r.x, r.y, targets, found_targets, W, H, robot_radius)
         
+        # Track communication: stigmergy has no communication
+        comm_tracker.record_step(0)
+        
         steps += 1
         
         current_coverage = np.sum(covered > 0)
@@ -116,44 +120,67 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     revisited = np.sum(covered > 1)
     pct_revisited = (revisited / total_cells) * 100.0
     
+    # Get communication metrics (will be all zeros for stigmergy)
+    comm_metrics = comm_tracker.get_metrics()
+    
+    current_coverage = np.sum(covered > 0)
+    percent_coverage = (current_coverage / total_cells) * 100.0
+
     return {
         "grid_size": grid_size,
         "n_robots": n_robots,
         "n_targets": len(targets),
         "n_failures": len(norm_sched),
-        "failed_robot_ids": ";".join(map(str, [rid for rid, _ in norm_sched])),
-        "fail_steps": ";".join(map(str, [st for _, st in norm_sched])),
+        # "failed_robot_ids": ";".join(map(str, [rid for rid, _ in norm_sched])),
+        # "fail_steps": ";".join(map(str, [st for _, st in norm_sched])),
+        "n_targets_found": len(found_targets),
         "t_targets": t_targets,
         "t_coverage": t_coverage,
-        "t_end": t_end,
-        "success_targets": success_targets,
-        "success_coverage": success_coverage,
-        "success_both": success_both,
-        "auc_cov": auc_cov,
-        "mean_cov": mean_cov,
-        "auc_found": auc_found,
+        "percent_coverage": percent_coverage,
         "mean_found": mean_found,
-        "pct_revisited": pct_revisited,
+        "TAU_DECAY": TAU_DECAY,
+        "BIAS_ALPHA": BIAS_ALPHA,
+        # "t_end": t_end,
+        # "success_targets": success_targets,
+        # "success_coverage": success_coverage,
+        # "success_both": success_both,
+        # "auc_cov": auc_cov,
+        # "mean_cov": mean_cov,
+        # "auc_found": auc_found,
+        # "pct_revisited": pct_revisited,
+        # # Communication bandwidth metrics (all zeros for stigmergy)
+        # "total_messages": comm_metrics['total_messages'],
+        # "total_bandwidth_bytes": comm_metrics['total_bandwidth_bytes'],
+        # "peak_messages_per_step": comm_metrics['peak_messages_per_step'],
+        # "peak_bandwidth_bytes": comm_metrics['peak_bandwidth_bytes'],
+        # "avg_messages_per_step": comm_metrics['avg_messages_per_step'],
     }
 
 
 def run_experiments():
     """Run all experiments and save results to Excel."""
     output_path = config.get_output_path("stigmergy_random")
-    xlsx_path = output_path / "results.xlsx"
+
     
     rows: List[Dict[str, object]] = []
     configs_list = config.get_experiment_configs()
     
     for grid_size, n_robots, n_targets, n_failures in configs_list:
+        if n_failures > 0:
+            xlsx_path = output_path / "E2/results.xlsx"
+        else:
+            xlsx_path = output_path / "E1/results.xlsx"
+        break
+    
+    for grid_size, n_robots, n_targets, n_failures in configs_list:
         max_horizon = config.calculate_horizon(grid_size, n_robots)
         
-        schedule_seed = (config.BASE_SEED * 10_000) + (grid_size * 100) + (n_robots * 10) + (n_failures * 1000)
+        schedule_seed = 42#(config.BASE_SEED * 10_000) + (grid_size * 100) + (n_robots * 10) + (n_failures * 1000)
         rng_sched = np.random.default_rng(schedule_seed)
         failure_schedule = config.make_random_failure_schedule(n_robots, n_failures, rng_sched, max_horizon)
         
         for run_idx in range(1, config.RUNS_PER_SCENARIO + 1):
-            run_seed = schedule_seed + run_idx
+            run_seed = schedule_seed #+ run_idx
             
             print(f"Running: grid={grid_size}, robots={n_robots}, targets={n_targets}, failures={n_failures}, run={run_idx}")
             
@@ -171,20 +198,14 @@ def run_experiments():
     df = pd.DataFrame(rows)
     
     summary = (
-        df.groupby(["grid_size", "n_robots", "n_failures"], as_index=False)
+        df.groupby(["grid_size", "n_robots", "n_failures", "TAU_DECAY", "BIAS_ALPHA"], as_index=False)
           .agg(
-              runs=("t_end", "size"),
+              runs=("t_targets", "size"),
+              avg_n_targets_found=("n_targets_found", "mean"),
               avg_t_targets=("t_targets", "mean"),
               avg_t_coverage=("t_coverage", "mean"),
-              avg_t_end=("t_end", "mean"),
-              sr_targets=("success_targets", "mean"),
-              sr_coverage=("success_coverage", "mean"),
-              sr_both=("success_both", "mean"),
-              avg_auc_cov=("auc_cov", "mean"),
-              avg_mean_cov=("mean_cov", "mean"),
-              avg_auc_found=("auc_found", "mean"),
+              avg_percent_coverage=("percent_coverage", "mean"),
               avg_mean_found=("mean_found", "mean"),
-              avg_pct_revisited=("pct_revisited", "mean"),
           )
     )
     
