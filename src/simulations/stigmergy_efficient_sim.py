@@ -158,7 +158,7 @@ def update(frame, robots, pheromone, covered, targets, found_targets, W, H, glob
 
 if __name__ == "__main__":
     # Simulation Parameters
-    GRID_SIZE = 300
+    GRID_SIZE = 100
     N_ROBOTS = 5
     N_TARGETS = 25
     STEPS_PER_FRAME = 5

@@ -143,9 +143,8 @@
 
 
 import numpy as np
-from dataclasses import dataclass
-from typing import List, Tuple
-import random
+from dataclasses import dataclass, field
+from typing import List, Optional, Tuple
 from .pheromone import deposit_uniform
 
 
@@ -179,9 +178,11 @@ class Robot:
     escape_len: int = 6         # how long to random-walk when stuck
     collision_radius: int = 1   # Chebyshev radius to avoid other robots
     footprint_shape: str = "manhattan"  # match your mark_visible/discovery
+    rng: Optional[np.random.Generator] = field(default=None, repr=False)
 
     _escape_steps: int = 0
     _stagnant_count: int = 0
+    stagnant_thresh: int = 5
 
     def is_clear(self, nx: int, ny: int, all_robots: List['Robot']) -> bool:
         for r in all_robots:
@@ -211,7 +212,10 @@ class Robot:
         # Escape mode (short)
         if self._escape_steps > 0:
             self._escape_steps -= 1
-            return random.choice(candidates)
+            if self.rng is not None:
+                idx = int(self.rng.integers(0, len(candidates)))
+                return candidates[idx]
+            return candidates[int(np.random.default_rng().integers(0, len(candidates)))]
 
         offsets = footprint_offsets(robot_radius, self.footprint_shape)
         K = len(offsets)  # correct footprint size
@@ -254,11 +258,13 @@ class Robot:
         else:
             self._stagnant_count = 0
 
-        if self._stagnant_count >= 5:
+        if self._stagnant_count >= self.stagnant_thresh:
             self._stagnant_count = 0
-            self.escape_len = max(3, W//50)
-            self._escape_steps = self.escape_len
-            return random.choice(candidates)
+            self._escape_steps = self.escape_len  # uses grid-adaptive value set at construction
+            if self.rng is not None:
+                idx = int(self.rng.integers(0, len(candidates)))
+                return candidates[idx]
+            return candidates[int(np.random.default_rng().integers(0, len(candidates)))]
 
         return (bx, by)
 

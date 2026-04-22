@@ -37,7 +37,7 @@ def takeover_append_path(robots: List[Robot], takeover_id: int, failed_id: int):
 
 def run_simulation(grid_size: int, n_robots: int, n_targets: int,
                    failure_schedule: List[Tuple[int, int]], rng_seed: int,
-                   robot_radius: int = 5) -> Dict[str, object]:
+                   robot_radius: int) -> Dict[str, object]:
     """Run headless centralized simulation and return comprehensive metrics."""
     rng = np.random.default_rng(rng_seed)
     W = H = grid_size
