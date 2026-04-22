@@ -1,0 +1,46 @@
+# Shared parameters across all simulations
+common:
+  GRID_SIZE: 100
+  N_ROBOTS: 10
+  N_TARGETS: 5
+  FAIL_ROBOT_ID: null
+  FAIL_AT_STEP: null
+  RANDOM_SEED: 7
+  ROBOT_RADIUS: 3
+  # Simulation parameters
+  STEPS_PER_FRAME: 10
+  INTERVAL_MS: 50
+
+# Centralized simulation specific parameters
+centralized_sim:
+  # Partitioning parameters
+  MAX_ITERS_ASSIGN: 30
+  MAX_ITERS_CENTERS: 10
+  LAMBDA_STEP0: 0.1
+  LAMBDA_DECAY: 0.1
+
+# Efficient stigmergy simulation specific parameters
+stigmergy_efficient_sim:
+  STEPS_PER_FRAME: 5
+  COLLISION_RADIUS: 1
+  PHER_DEPOSIT: 1.0
+  TAU_DECAY: 200.0
+  PHER_MIN: 1.0e-6
+
+# Random walk stigmergy simulation specific parameters
+stigmergy_random_sim:
+  COLLISION_RADIUS: 1
+  PHER_DEPOSIT: 1.0
+  TAU_DECAY: 600.0
+  PHER_MIN: 1.0e-6
+  BIAS_ALPHA: 550
+  UNCOVERED_BONUS: 10.0
+
+# Spiral plotting stigmergy simulation specific parameters
+stigmergy_spiral_plotting_sim:
+  STEPS_PER_FRAME: 15
+  COLLISION_RADIUS: 1
+  PLOT_LEN: 200
+  PHER_DEPOSIT: 1.0
+  TAU_DECAY: 200.0
+  PHER_MIN: 1.0e-6

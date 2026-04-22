@@ -137,7 +137,7 @@ if __name__ == "__main__":
     PHER_DEPOSIT = 1.0
     TAU_DECAY = 600.0
     PHER_MIN = 1e-6
-    BIAS_ALPHA = 250
+    BIAS_ALPHA = 550
     UNCOVERED_BONUS = 10.0
     COLLISION_RADIUS = 1  # 1 = 3x3 block safe zone
     rng = np.random.default_rng(RANDOM_SEED)

@@ -38,7 +38,7 @@ class Robot:
                 return False
         return True
 
-    def step(self, all_robots: List['Robot'] = None, collision_radius: int = 1):
+    def step(self, all_robots: List['Robot'] = None):
         """
         Advance one step along path (unless failed or blocked by collision).
         If the next position would collide with another robot, wait at current position.
@@ -49,11 +49,6 @@ class Robot:
         # Check if we can advance
         if self.idx < len(self.path) - 1:
             next_pos = self.path[self.idx + 1]
-            
-            # If collision avoidance is enabled and next position is blocked, wait
-            # if all_robots is not None and not self.is_clear(next_pos[0], next_pos[1], all_robots, collision_radius):
-            #     return  # Wait at current position
-            
-            # Advance to next position
+        
             self.idx += 1
 

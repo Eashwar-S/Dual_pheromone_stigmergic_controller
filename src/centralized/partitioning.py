@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Tuple
+import matplotlib.pyplot as plt
 
 
 def kpp_init(points: np.ndarray, k: int, rng: np.random.Generator) -> np.ndarray:
@@ -33,6 +34,7 @@ def balanced_power_diagram_assign(points: np.ndarray, centers: np.ndarray, targe
         sizes = np.bincount(labels, minlength=k).astype(float)
         lambdas += step * (sizes - target)
         step *= decay
+        # print(f"Iteration {_}, step {step}, sizes {sizes}, lambdas {lambdas}")
     return labels, lambdas
 
 
@@ -53,3 +55,52 @@ def lloyd_balanced(points: np.ndarray, k: int, max_iters_centers: int, max_iters
         centers = new_centers
     labels, _ = balanced_power_diagram_assign(points, centers, target, max_iters_assign, step0, decay, rng)
     return labels, centers
+
+if __name__ == "__main__":
+    rng = np.random.default_rng(42)
+
+    # --- parameters ---
+    n_points = 1000
+    k = 5
+    target = n_points // k
+
+    # --- generate random points in 2D ---
+    points = rng.uniform(0, 100, size=(n_points, 2))
+
+    # --- initialize centers randomly from points ---
+    centers = points[rng.choice(n_points, size=k, replace=False)]
+
+    print(centers.shape)
+    # --- run assignment ---
+    labels, lambdas = balanced_power_diagram_assign(
+        points=points,
+        centers=centers,
+        target=target,
+        iters=100,
+        step0=0.1,
+        decay=0.99,
+        rng=rng
+    )
+    print(lambdas)
+
+    # --- analyze results ---
+    sizes = np.bincount(labels, minlength=k)
+
+    print("Target size per cluster:", target)
+    print("Actual cluster sizes:", sizes)
+    print("Lambda values:", lambdas)
+
+    # --- visualize ---
+    # plt.figure(figsize=(6, 6))
+
+    # for j in range(k):
+    #     cluster_points = points[labels == j]
+    #     plt.scatter(cluster_points[:, 0], cluster_points[:, 1], s=10, label=f"Cluster {j}")
+
+    # plt.scatter(centers[:, 0], centers[:, 1],
+    #             c='black', marker='x', s=100, label='Centers')
+
+    # plt.title("Balanced Power Diagram Assignment")
+    # plt.legend()
+    # plt.grid(True)
+    # plt.show()

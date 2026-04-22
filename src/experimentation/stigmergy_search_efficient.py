@@ -42,8 +42,8 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
         start_positions[i][0],
         start_positions[i][1],
         local_covered=np.zeros((H, W), dtype=bool),
-        escape_len=ESCAPE_LEN,
-        stagnant_thresh=STAGNANT_THRESH,
+        # escape_len=ESCAPE_LEN,
+        # stagnant_thresh=STAGNANT_THRESH,
     ) for i in range(n_robots)]
     
     targets = generate_unique_targets(grid_size, n_targets, rng)
