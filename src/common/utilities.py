@@ -9,7 +9,7 @@ def generate_unique_targets(grid_size: int, m: int, rng: np.random.Generator) ->
     return set(cells[i] for i in choices)
 
 
-def neighbors_von_neumann(x: int, y: int, W: int, H: int, r: int = 5) -> List[Tuple[int, int]]:
+def neighbors_von_neumann(x: int, y: int, W: int, H: int, r: int) -> List[Tuple[int, int]]:
     """Return all cells within Manhattan distance r from (x, y)."""
     out = []
     for dy in range(-r, r + 1):
@@ -21,7 +21,7 @@ def neighbors_von_neumann(x: int, y: int, W: int, H: int, r: int = 5) -> List[Tu
     return out
 
 
-def mark_visible(grid_bool: np.ndarray, x: int, y: int, r: int = 5):
+def mark_visible(grid_bool: np.ndarray, x: int, y: int, r: int):
     """Mark all cells within Manhattan distance r from (x, y). Increments int arrays, sets bool arrays to True."""
     H, W = grid_bool.shape
     for dy in range(-r, r + 1):
@@ -36,7 +36,7 @@ def mark_visible(grid_bool: np.ndarray, x: int, y: int, r: int = 5):
 
 
 def discover_targets_in_vnhood(x: int, y: int, targets: Set[Tuple[int, int]], 
-                                found: Set[Tuple[int, int]], W: int, H: int, r: int = 5):
+                                found: Set[Tuple[int, int]], W: int, H: int, r: int):
     """Discover targets within von Neumann neighborhood and add to found set."""
     for (nx, ny) in neighbors_von_neumann(x, y, W, H, r):
         if (nx, ny) in targets:

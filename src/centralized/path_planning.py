@@ -1,105 +1,7 @@
 import numpy as np
 from typing import List, Tuple
-from ..common.geometry import manhattan_connect
 from collections import deque
 
-
-# def sensor_aware_path_for_region(mask: np.ndarray, robot_radius: int) -> List[Tuple[int, int]]:
-#     """
-#     Generate boustrophedon-style sweeping path for a region mask.
-
-#     Modification:
-#       - Force the path to START at a corner of the region's bounding box (sub-area grid),
-#         then connect to the first sweep start.
-#     """
-#     H, W = mask.shape
-#     path: List[Tuple[int, int]] = []
-
-#     # Overlapping stride is safer on integer grids than "just touching" (2R).
-#     step_size = max(1, 2 * robot_radius - 1)
-
-#     # Rows that have ANY cells in this region
-#     rows_with_cells = np.where(mask.any(axis=1))[0]
-#     if rows_with_cells.size == 0:
-#         return path
-
-#     # Bounding box of the region (sub-area grid)
-#     ys, xs = np.where(mask)
-#     x_min, x_max = int(xs.min()), int(xs.max())
-#     y_min, y_max = int(ys.min()), int(ys.max())
-
-#     # Pick a corner of the bounding box.
-#     # Choose one (bottom-left by default). You can swap to any of the 4:
-#     # (x_min,y_min), (x_max,y_min), (x_min,y_max), (x_max,y_max)
-#     desired_corner = (x_min, y_min)
-
-#     # If the corner is not inside mask (possible for jagged shapes),
-#     # snap to the closest True cell to that corner.
-#     if not mask[desired_corner[1], desired_corner[0]]:
-#         # choose closest mask cell by L1 distance
-#         d = np.abs(xs - desired_corner[0]) + np.abs(ys - desired_corner[1])
-#         k = int(np.argmin(d))
-#         start_corner = (int(xs[k]), int(ys[k]))
-#     else:
-#         start_corner = desired_corner
-
-#     lr = True
-#     started = False
-
-#     y0 = y_min
-#     while y0 <= y_max:
-#         y1 = min(y0 + step_size - 1, y_max)
-
-#         # Find an actual sweep row within this band [y0, y1]
-#         sweep_y = None
-#         for yy in range(y0, y1 + 1):
-#             if mask[yy, :].any():
-#                 sweep_y = yy
-#                 break
-
-#         if sweep_y is None:
-#             y0 = y1 + 1
-#             continue
-
-#         xs_row = np.where(mask[sweep_y, :])[0].tolist()
-#         if not xs_row:
-#             y0 = y1 + 1
-#             continue
-
-#         # Build contiguous segments on this sweep row
-#         segs = []
-#         s = xs_row[0]
-#         p = xs_row[0]
-#         for x in xs_row[1:]:
-#             if x == p + 1:
-#                 p = x
-#             else:
-#                 segs.append((s, p))
-#                 s = x
-#                 p = x
-#         segs.append((s, p))
-
-#         # Reverse segments if moving Right-to-Left
-#         segs = segs if lr else list(reversed(segs))
-
-#         for (a, b) in segs:
-#             run = list(range(a, b + 1)) if lr else list(range(b, a - 1, -1))
-
-#             if not started:
-#                 # --- MODIFICATION: start at region corner, then connect to first sweep start ---
-#                 path.append(start_corner)
-#                 manhattan_connect(path, run[0], sweep_y)
-#                 started = True
-#             else:
-#                 manhattan_connect(path, run[0], sweep_y)
-
-#             for x in run[1:]:
-#                 path.append((x, sweep_y))
-
-#         lr = not lr
-#         y0 = y1 + 1
-
-#     return path
 
 def _bfs_path_in_mask(mask: np.ndarray,
                       start: Tuple[int, int],
@@ -154,7 +56,7 @@ def sensor_aware_path_for_region(mask: np.ndarray, robot_radius: int) -> List[Tu
     H, W = mask.shape
     path: List[Tuple[int, int]] = []
 
-    # --- FIX for gaps: overlapping stride (NOT 2R+1) ---
+    # --- FIX for gaps: overlapping stride (NOT 2R-1) ---
     step_size = max(1, 2 * robot_radius - 1)
 
     ys, xs = np.where(mask)

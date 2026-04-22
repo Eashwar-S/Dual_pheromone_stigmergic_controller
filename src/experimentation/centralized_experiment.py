@@ -126,7 +126,7 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
             discover_targets_in_vnhood(x, y, targets, found_targets, W, H, robot_radius)
         
         for r in robots:
-            r.step(robots, COLLISION_RADIUS)
+            r.step(robots)
         
         for r in robots:
             x, y = r.pos

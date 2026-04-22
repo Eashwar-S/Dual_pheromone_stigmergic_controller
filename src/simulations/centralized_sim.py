@@ -74,7 +74,7 @@ def maybe_reallocate_failed_path(robots, fail_robot_id, failure_triggered, failu
 
 def sim_step(robots, covered, targets, found_targets, W, H, global_step, fail_at_step, 
              fail_robot_id, failure_triggered, failure_reallocated, targets_found_over_time, 
-             remaining_scatters, collision_radius):
+             remaining_scatters):
     """Execute one simulation step."""
     failure_triggered = maybe_trigger_failure(global_step, fail_at_step, fail_robot_id, robots, failure_triggered)
     
@@ -84,7 +84,7 @@ def sim_step(robots, covered, targets, found_targets, W, H, global_step, fail_at
         discover_targets_in_vnhood(x, y, targets, found_targets, W, H, r=ROBOT_RADIUS)
     
     for r in robots:
-        r.step(robots, collision_radius)
+        r.step(robots)
     
     for r in robots:
         x, y = r.pos
@@ -108,13 +108,13 @@ def update(frame, robots, covered, targets, found_targets, W, H, global_step, fa
            fail_robot_id, failure_triggered, failure_reallocated, targets_found_over_time,
            remaining_scatters, visited_scatters, world_img, shared_img, robot_scatter,
            robot_labels, disc_plot, und_plot, ax_world, fig, frame_writer, steps_per_frame,
-           output_dir, plot_saved, collision_radius, state_dict):
+           output_dir, plot_saved, state_dict):
     """Animation update function."""
     for _ in range(steps_per_frame):
         global_step, failure_triggered, failure_reallocated = sim_step(
             robots, covered, targets, found_targets, W, H, global_step, fail_at_step,
             fail_robot_id, failure_triggered, failure_reallocated, targets_found_over_time, 
-            remaining_scatters, collision_radius
+            remaining_scatters
         )
     
     state_dict['global_step'] = global_step
@@ -180,25 +180,25 @@ def update(frame, robots, covered, targets, found_targets, W, H, global_step, fa
 
 
 if __name__ == "__main__":
-    GRID_SIZE = 300
-    N_ROBOTS = 15
-    N_TARGETS = 60
-    STEPS_PER_FRAME = 5
+    GRID_SIZE = 100
+    N_ROBOTS = 10
+    N_TARGETS = 5
+    STEPS_PER_FRAME = 10
     INTERVAL_MS = 50
-    RANDOM_SEED = 42
-    ROBOT_RADIUS = 5
-    COLLISION_RADIUS = 0  # 1 = 3x3 block safe zone
+    RANDOM_SEED = 7
+    ROBOT_RADIUS = 3
     
     targets_found_over_time = []
     plot_saved = False
     OUTPUT_DIR = Path('output_frames/centralized_approach')
     
-    FAIL_ROBOT_ID = None
-    FAIL_AT_STEP = None
+    FAIL_ROBOT_ID = 1
+    FAIL_AT_STEP = 20
     global_step = 0
     failure_triggered = False
     failure_reallocated = False
     
+    # partitioning parameters
     MAX_ITERS_ASSIGN = 30
     MAX_ITERS_CENTERS = 10
     LAMBDA_STEP0 = 0.1
@@ -336,7 +336,7 @@ if __name__ == "__main__":
                      FAIL_ROBOT_ID, state_dict['failure_triggered'], state_dict['failure_reallocated'], 
                      targets_found_over_time, remaining_scatters, visited_scatters, world_img, shared_img, 
                      robot_scatter, robot_labels, disc_plot, und_plot, ax_world, fig, frame_writer, 
-                     STEPS_PER_FRAME, OUTPUT_DIR, state_dict['plot_saved'], COLLISION_RADIUS, state_dict)
+                     STEPS_PER_FRAME, OUTPUT_DIR, state_dict['plot_saved'], state_dict)
     
     anim = run_animation(fig, update_wrapper, frames=2000000, interval_ms=INTERVAL_MS, blit=False)
     plt.show()
