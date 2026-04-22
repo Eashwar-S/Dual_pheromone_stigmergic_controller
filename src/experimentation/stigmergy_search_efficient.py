@@ -20,10 +20,19 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     W = H = grid_size
     max_horizon = config.calculate_horizon(grid_size, n_robots)
     
-    PHER_DEPOSIT = 1.0
-    TAU_DECAY = 200.0
+    # Grid-adaptive deposit: calibrated so tanh(pher_sum/sigma) ≈ tanh(2) ≈ 0.96 at fresh cells.
+    # sigma = 0.2*W, footprint K=25 cells, target ratio = 2 → D = 2*(0.2*W)/25 = 0.016*W
+    # Ratio=5 was too strong (territory-locking), ratio=2 gives strong avoidance without traps.
+    PHER_DEPOSIT = 1.0#0.016 * grid_size
+    # Grid-adaptive decay: pheromone lasts ~5% of one robot's fair-share coverage time.
+    # Ensures failed-robot zones become attractive again within the failure window (steps 150-400).
+    TAU_DECAY = max(100.0, (grid_size ** 2 / n_robots) * 0.05)
     PHER_MIN = 1e-6
     COLLISION_RADIUS = 0  # 1 = 3x3 block safe
+    # Longer escape bursts so robots clear large pheromone zones (doubled from //20)
+    ESCAPE_LEN = max(10, grid_size // 10)
+    # Trigger escapes sooner: max(3, grid_size//50) fires at 3-10 steps (was 5-16)
+    STAGNANT_THRESH = max(3, grid_size // 50)
     
     # Generate random starting positions for robots
     start_positions = config.generate_robot_positions(grid_size, n_robots, rng)
@@ -32,7 +41,9 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
         i,
         start_positions[i][0],
         start_positions[i][1],
-        local_covered=np.zeros((H, W), dtype=bool)
+        local_covered=np.zeros((H, W), dtype=bool),
+        escape_len=ESCAPE_LEN,
+        stagnant_thresh=STAGNANT_THRESH,
     ) for i in range(n_robots)]
     
     targets = generate_unique_targets(grid_size, n_targets, rng)
@@ -146,12 +157,12 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
         "t_coverage": t_coverage,
         "percent_coverage": percent_coverage,
         "mean_found": mean_found,
-        "TAU_DECAY": TAU_DECAY,
+        "TAU_DECAY": round(TAU_DECAY, 1),
         "BIAS_ALPHA": 1.0,  # Robot alpha
         "sigma": 0.2 * grid_size,
-        "escape_len": max(3, grid_size // 50),
+        "escape_len": ESCAPE_LEN,
         "beta": 0.3,        # Robot beta
-        "_stagnant_count": 5,
+        "_stagnant_count": STAGNANT_THRESH,
         # "t_end": t_end,
         # "success_targets": success_targets,
         # "success_coverage": success_coverage,

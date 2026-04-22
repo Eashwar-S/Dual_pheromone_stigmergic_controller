@@ -11,9 +11,10 @@ RUNS_PER_SCENARIO = 5
 GRID_SIZES = [100, 200, 300, 400, 500]
 ROBOT_COUNTS = [5, 8, 10, 12, 15]
 TARGET_COUNTS = [20, 40, 60, 80, 100]
-FAILURE_COUNTS = [0, 0, 0, 0, 0]
+# FAILURE_COUNTS = [0, 0, 0, 0, 0]
 
 # Uncomment to run E2 with failures
+FAILURE_COUNTS = [1, 2, 3, 4, 5]
 # FAILURE_COUNTS = [2, 5, 7, 9, 11]
 
 EXPERIMENT_RESULTS_DIR = Path(__file__).parent / "experiment_results"
@@ -54,8 +55,8 @@ def make_random_failure_schedule(n_robots: int, n_failures: int,
         return []
     
     robot_ids = rng.choice(n_robots, size=n_fail, replace=False)
-    lo = 5
-    hi = max(6, 300)
+    lo = 150
+    hi = 400
     steps = rng.integers(low=lo, high=hi, size=n_fail)
     
     return [(int(rid), int(st)) for rid, st in zip(robot_ids, steps)]

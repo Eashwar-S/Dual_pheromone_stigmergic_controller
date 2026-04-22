@@ -21,7 +21,7 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     max_horizon = config.calculate_horizon(grid_size, n_robots)
     
     PHER_DEPOSIT = 1.0
-    TAU_DECAY = 200.0
+    TAU_DECAY = max(100.0, (grid_size ** 2 / n_robots) * 0.05)
     PHER_MIN = 1e-6
     BIAS_ALPHA = 0.5
     UNCOVERED_BONUS = 2.0
