@@ -3,13 +3,13 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Set, Tuple
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.common.simulation import FrameWriter, compute_fps, run_animation
-from src.common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
-from src.common.visualization import coverage_to_image, save_targets_over_time_plot
-from src.stigmergy.pheromone import apply_decay
-from src.stigmergy.robot_efficient import Robot
+
+from simulation import FrameWriter, compute_fps, run_animation
+from utilities_robomaster import generate_unique_targets, mark_visible, discover_targets_in_vnhood
+from visualization import coverage_to_image, save_targets_over_time_plot
+from pheromone import apply_decay
+from robot_efficient_robomaster import Robot
 
 
 def pheromone_to_rgba(p_rep: np.ndarray) -> np.ndarray:
@@ -51,9 +51,9 @@ def sim_step(robots, pheromone, covered, targets, found_targets, W, H, global_st
     # Pre-move sensing
     for r in robots:
         if not r.failed:
-            mark_visible(r.local_covered, r.x, r.y, robot_radius)
-            mark_visible(covered, r.x, r.y, robot_radius)
-            discover_targets_in_vnhood(r.x, r.y, targets, found_targets, W, H, robot_radius)
+            mark_visible(r.local_covered, r.x, r.y, r.heading, robot_radius)
+            mark_visible(covered, r.x, r.y, r.heading, robot_radius)
+            discover_targets_in_vnhood(r.x, r.y, r.heading, targets, found_targets, W, H, robot_radius)
     
     # Execute moves
     for r in robots:
@@ -65,9 +65,9 @@ def sim_step(robots, pheromone, covered, targets, found_targets, W, H, global_st
     # Post-move sensing
     for r in robots:
         if not r.failed:
-            mark_visible(r.local_covered, r.x, r.y, robot_radius)
-            mark_visible(covered, r.x, r.y, robot_radius)
-            discover_targets_in_vnhood(r.x, r.y, targets, found_targets, W, H, robot_radius)
+            mark_visible(r.local_covered, r.x, r.y, r.heading, robot_radius)
+            mark_visible(covered, r.x, r.y, r.heading, robot_radius)
+            discover_targets_in_vnhood(r.x, r.y, r.heading, targets, found_targets, W, H, robot_radius)
     
     global_step += 1
     targets_found_over_time.append(len(found_targets))
@@ -136,7 +136,7 @@ def update(frame, robots, pheromone, covered, targets, found_targets, W, H, glob
     
     # Update title
     ax_world.set_title(
-        "Stigmergy Search (Efficient) — Repulsive Pheromone\n"
+        "Robomaster Search (Kinematic) — Repulsive Pheromone\n"
         f"Covered: {covered.sum()} / {W*H} cells, Found: {len(found_targets)} / {len(targets)}"
     )
     
@@ -146,9 +146,9 @@ def update(frame, robots, pheromone, covered, targets, found_targets, W, H, glob
         save_targets_over_time_plot(output_dir / "targets_over_time.png", targets_found_over_time)
         
         if fail_robot_id is not None:
-            np.save('output_metrics/stigmergy_search_efficient_with_failure.npy', np.array(targets_found_over_time))
+            np.save('output_metrics/robomaster_search_with_failure.npy', np.array(targets_found_over_time))
         else:
-            np.save('output_metrics/stigmergy_search_efficient_without_failure.npy', np.array(targets_found_over_time))
+            np.save('output_metrics/robomaster_search_without_failure.npy', np.array(targets_found_over_time))
         plot_saved = True
         state_dict['plot_saved'] = plot_saved
     
@@ -177,7 +177,7 @@ if __name__ == "__main__":
     FAIL_AT_STEP = None   # Set to step number to trigger failure
     
     # Output
-    OUTPUT_DIR = Path('output_frames/stigmergy_search_efficient')
+    OUTPUT_DIR = Path('output_frames/robomaster_search')
     targets_found_over_time = []
     plot_saved = False
     global_step = 0

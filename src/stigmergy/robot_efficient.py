@@ -56,6 +56,7 @@ class Robot:
             u1_val = 0
             u2_val = 0
             pher_sum = 0.0
+            self_visited = 0
 
             for dy in range(-robot_radius, robot_radius + 1):
                 for dx in range(-robot_radius, robot_radius + 1):
@@ -71,12 +72,15 @@ class Robot:
                                 u2_val += 1
                                 if p_val == 0.0:
                                     u1_val += 1
+                            else:
+                                self_visited += 1
 
             scored_moves.append({
                 'move': (nx, ny),
                 'u1': u1_val,
                 'u2': u2_val,
-                'pher': pher_sum
+                'pher': pher_sum,
+                'self': self_visited
             })
 
         # ============================
@@ -92,8 +96,19 @@ class Robot:
         best_u2 = [m for m in best_u1 if m['u2'] == max_u2]
 
         # if meaningful novelty exists → choose randomly among best
-        if max_u1 > 0 or max_u2 > 0:
+        # if max_u1 > 0 or max_u2 > 0:
+        #     return random.choice(best_u2)['move']
+
+        # If without pheromone is not present then randomly choose best unvisited area
+        print("len of best_u2 =============================", len(best_u2))
+        if max_u1 > 0:
             return random.choice(best_u2)['move']
+
+        '''
+        # If without pheromone is present then randomly choose best unvisited area
+        # elif max_u2 > 0:
+        #     return random.choice(best_u2)['move']
+
 
         # fallback → pheromone-weighted stochastic move
         # Lower pheromone = higher probability
@@ -112,20 +127,59 @@ class Robot:
 
         # idx = np.random.choice(len(scored_moves), p=weights)
         # return scored_moves[idx]['move']
+        ''' # version 1
 
-        epsilon = 0.1  # small randomness
+        # version 2 (epsilon-greedy) depends on epsilon
+        # epsilon = 0.1  # small randomness
 
-        if np.random.rand() < epsilon:
-            # exploration
-            return random.choice(candidates)
-        else:
-            # exploitation → pick lowest pheromone
-            min_pher = min(m['pher'] for m in scored_moves)
+        # if np.random.rand() < epsilon:
+        #     # exploration
+        #     return random.choice(candidates)
+        # else:
+        #     # exploitation → pick lowest pheromone
+        #     min_pher = min(m['pher'] for m in scored_moves)
 
-            # handle ties (important!)
-            best = [m for m in scored_moves if m['pher'] == min_pher]
+        #     # handle ties (important!)
+        #     best = [m for m in scored_moves if m['pher'] == min_pher]
 
-            return random.choice(best)['move']
+        #     return random.choice(best)['move']
+
+        # version 3 (pheromone-weighted stochastic move)
+        # pher_values = np.array([m['pher'] for m in scored_moves], dtype=float)
+
+        # pher_values = pher_values - np.min(pher_values)
+        # scale = np.std(pher_values) + 1e-6
+        # weights = np.exp(-(pher_values / scale))
+        # print("weights =========================", weights)
+        # total = weights.sum()
+
+        # if total <= 1e-12 or not np.isfinite(total):
+        #     weights = np.ones_like(weights) / len(weights)
+        # else:
+        #     weights /= total
+
+        # idx = np.random.choice(len(scored_moves), p=weights)
+        # return scored_moves[idx]['move']
+
+        # version 4
+        
+        pher_vals = np.array([m['pher'] for m in scored_moves], dtype=float)
+        self_vals = np.array([m['self'] for m in scored_moves], dtype=float)
+
+        pher_range = np.ptp(pher_vals)  # max - min
+        self_range = np.ptp(self_vals)
+        # normalize to [0, 1]
+        pher_norm = (pher_vals - pher_vals.min()) / (pher_range + 1e-6)
+        self_norm = (self_vals - self_vals.min()) / (self_range + 1e-6)
+
+        costs = np.maximum(pher_norm, self_norm)
+        # costs = [m['pher'] + m['self'] for m in scored_moves]
+        print("costs ========================", costs)
+        print()
+        min_cost = min(costs)
+        best = [m for m, c in zip(scored_moves, costs) if c == min_cost]
+
+        return random.choice(best)['move']
 
     def step(self, pher_rep: np.ndarray, all_robots: List['Robot'], 
              robot_radius: int, collision_radius: int = 1):
