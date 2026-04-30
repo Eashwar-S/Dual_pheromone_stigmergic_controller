@@ -3,13 +3,13 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Set, Tuple
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.common.simulation import FrameWriter, compute_fps, run_animation
-from src.common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
-from src.common.visualization import coverage_to_image, save_targets_over_time_plot
-from src.stigmergy.pheromone import apply_decay
-from src.stigmergy.robot_efficient import Robot
+
+from simulation import FrameWriter, compute_fps, run_animation
+from utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
+from visualization import coverage_to_image, save_targets_over_time_plot
+from pheromone import apply_decay
+from robot_efficient import Robot
 
 
 def pheromone_to_rgba(p_rep: np.ndarray) -> np.ndarray:
