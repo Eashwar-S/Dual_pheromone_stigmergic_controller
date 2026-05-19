@@ -1,17 +1,31 @@
 import numpy as np
+import sys
+from pathlib import Path
+
+CURRENT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = CURRENT_DIR.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from common.utilities import generate_unique_targets
 
 class MultiAgentGridEnv:
-    def __init__(self, grid_size=10, num_agents=3, num_targets=5, num_obstacles=5):
+    def __init__(self, grid_size=10, num_agents=3, num_targets=5, num_obstacles=5, seed=None):
         self.grid_size = grid_size
         self.num_agents = num_agents
         self.num_targets = num_targets
         self.num_obstacles = num_obstacles
+        self.seed = seed
+        self.rng = np.random.default_rng(seed)
         
         # Actions: 0: Up, 1: Down, 2: Left, 3: Right
         self.action_space = 4
         self.reset()
 
-    def reset(self):
+    def reset(self, seed=None):
+        if seed is not None:
+            self.seed = seed
+            self.rng = np.random.default_rng(seed)
+
         self.grid = np.zeros((self.grid_size, self.grid_size))
         self.visited_memory = {i: np.zeros((self.grid_size, self.grid_size)) for i in range(self.num_agents)}
         self.agents = {}
@@ -19,24 +33,20 @@ class MultiAgentGridEnv:
         self.obstacles = set()
         self.steps = 0
         
-        # Place Obstacles
-        while len(self.obstacles) < self.num_obstacles:
-            pos = (np.random.randint(self.grid_size), np.random.randint(self.grid_size))
-            self.obstacles.add(pos)
-            
-        # Place Targets
+        self.obstacles = generate_unique_targets(self.grid_size, self.num_obstacles, self.rng)
         while len(self.targets) < self.num_targets:
-            pos = (np.random.randint(self.grid_size), np.random.randint(self.grid_size))
-            if pos not in self.obstacles:
-                self.targets.add(pos)
-                
-        # Place Agents
+            candidate = generate_unique_targets(self.grid_size, self.num_targets - len(self.targets), self.rng)
+            self.targets.update(pos for pos in candidate if pos not in self.obstacles)
+
         for i in range(self.num_agents):
             while True:
-                pos = (np.random.randint(self.grid_size), np.random.randint(self.grid_size))
-                if pos not in self.obstacles and pos not in self.agents.values():
+                pos = (
+                    int(self.rng.integers(0, self.grid_size)),
+                    int(self.rng.integers(0, self.grid_size)),
+                )
+                if pos not in self.obstacles and pos not in self.targets and pos not in self.agents.values():
                     self.agents[i] = pos
-                    self.visited_memory[i][pos] = 1 # Initialize memory
+                    self.visited_memory[i][pos] = 1
                     break
                     
         return self._get_all_observations()
