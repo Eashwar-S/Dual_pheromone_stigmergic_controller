@@ -18,6 +18,14 @@ FAILURE_COUNTS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 # FAILURE_COUNTS = [1, 2, 3, 4, 5]
 # FAILURE_COUNTS = [2, 5, 7, 9, 11]
 
+FAILURE_TIME_MODE = "mixed"
+FAILURE_TIME_WINDOWS = {
+    "early": (0.10, 0.30),
+    "middle": (0.40, 0.60),
+    "late": (0.70, 0.90),
+    "mixed": (0.10, 0.90),
+}
+
 EXPERIMENT_RESULTS_DIR = Path(__file__).parent / "experiment_results"
 
 
@@ -36,28 +44,27 @@ def calculate_horizon(grid_size: int, n_robots: int, kappa: float = KAPPA) -> in
     return int(np.ceil(kappa * (grid_size ** 2) / n_robots))
 
 
-def make_random_failure_schedule(n_robots: int, n_failures: int, 
+def make_random_failure_schedule(grid_size: int, n_robots: int, n_failures: int,
                                  rng: np.random.Generator,
-                                 max_horizon: int) -> List[Tuple[int, int]]:
-    """
-    Generate random failure schedule.
-    
-    Args:
-        n_robots: Total number of robots
-        n_failures: Number of robots to fail
-        rng: Random number generator
-        max_horizon: Maximum timestep for failures
-    
-    Returns:
-        List of (robot_id, failure_timestep) tuples
-    """
+                                 max_horizon: int,
+                                 robot_radius: int = ROBOT_RADIUS,
+                                 slack: float = 3.0,
+                                 failure_time_mode: str = FAILURE_TIME_MODE) -> List[Tuple[int, int]]:
+    """Generate random failure schedule within a coverage-based time bound."""
     n_fail = int(min(max(n_failures, 0), n_robots))
     if n_fail == 0:
         return []
     
     robot_ids = rng.choice(n_robots, size=n_fail, replace=False)
-    lo = 150
-    hi = 400
+    active_robots = max(1, n_robots - n_failures)
+    new_cells_per_step = 2 * robot_radius + 1
+    ideal_steps = (grid_size * grid_size) / (active_robots * new_cells_per_step)
+    failure_time_bound = int(np.ceil(slack * ideal_steps))
+
+    start_frac, end_frac = FAILURE_TIME_WINDOWS[failure_time_mode]
+    timing_bound = min(max_horizon, failure_time_bound)
+    lo = max(1, int(start_frac * timing_bound))
+    hi = max(lo + 1, int(end_frac * timing_bound))
     steps = rng.integers(low=lo, high=hi, size=n_fail)
     
     return [(int(rid), int(st)) for rid, st in zip(robot_ids, steps)]
