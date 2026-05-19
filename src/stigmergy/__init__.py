@@ -1,1 +1,0 @@
-"""Stigmergy approach components."""
