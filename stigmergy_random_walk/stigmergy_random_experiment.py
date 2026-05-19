@@ -110,9 +110,11 @@ def run_experiments():
     
     rows: List[Dict[str, object]] = []
     configs_list = config_experiments.get_experiment_configs()
+    is_failure_experiment = any(cfg[3] > 0 for cfg in configs_list)
+    failure_time_modes = list(config_experiments.FAILURE_TIME_WINDOWS) if is_failure_experiment else [config_experiments.FAILURE_TIME_MODE]
 
     # Determine save path based on first config
-    if configs_list and configs_list[0][3] > 0:
+    if is_failure_experiment:
         xlsx_path = output_path / "E2/results.xlsx"
         dir_path = output_path / "E2"
     else:
@@ -122,43 +124,54 @@ def run_experiments():
 
     for grid_size, n_robots, n_targets, n_failures in configs_list:
         max_horizon = config_experiments.calculate_horizon(grid_size, n_robots)
-        schedule_seed = 42 
-        rng_sched = np.random.default_rng(schedule_seed)
-        failure_schedule = config_experiments.make_random_failure_schedule(n_robots, n_failures, rng_sched, max_horizon)
-        
-        # Tier 1: The Environment Layout (M)
-        for exp_idx in range(1, NUM_EXPERIMENTS + 1): 
-            run_seed = schedule_seed + exp_idx
+        modes_for_config = failure_time_modes if n_failures > 0 else [config_experiments.FAILURE_TIME_MODE]
+
+        for failure_time_mode in modes_for_config:
+            schedule_seed = 42 
+            rng_sched = np.random.default_rng(schedule_seed)
+            failure_schedule = config_experiments.make_random_failure_schedule(
+                grid_size=grid_size,
+                n_robots=n_robots,
+                n_failures=n_failures,
+                rng=rng_sched,
+                max_horizon=max_horizon,
+                failure_time_mode=failure_time_mode,
+            )
             
-            # Tier 2: The Stochastic Action Trial (N)
-            for sim_idx in range(1, NUM_SIMULATION + 1):
-                robot_seed = run_seed * 1000 + sim_idx 
+            # Tier 1: The Environment Layout (M)
+            for exp_idx in range(1, NUM_EXPERIMENTS + 1): 
+                run_seed = schedule_seed + exp_idx
                 
-                print(f"Running Stigmergy: grid={grid_size}, robots={n_robots}, targets={n_targets}, failures={n_failures}, exp={exp_idx}, sim={sim_idx}")
-                
-                result = run_simulation(
-                    grid_size=grid_size,
-                    n_robots=n_robots,
-                    n_targets=n_targets,
-                    failure_schedule=failure_schedule,
-                    rng_seed=run_seed,
-                    robot_seed=robot_seed,
-                    robot_radius=config_experiments.ROBOT_RADIUS
-                )
-                
-                # Inject IDs and constants to create new columns in the DataFrame
-                result["experiment_id"] = exp_idx
-                result["simulation_id"] = sim_idx
-                result["num_experiments"] = NUM_EXPERIMENTS
-                result["num_simulations"] = NUM_SIMULATION
-                
-                print(f't_targets: {result["t_targets"]}, t_coverage: {result["t_coverage"]}, percent_coverage: {result["percent_coverage"]:.2f}%, mean_found: {result["mean_found"]:.4f}')
-                rows.append(result)
+                # Tier 2: The Stochastic Action Trial (N)
+                for sim_idx in range(1, NUM_SIMULATION + 1):
+                    robot_seed = run_seed * 1000 + sim_idx 
+                    
+                    print(f"Running Stigmergy: grid={grid_size}, robots={n_robots}, targets={n_targets}, failures={n_failures}, failure_time_mode={failure_time_mode}, exp={exp_idx}, sim={sim_idx}")
+                    
+                    result = run_simulation(
+                        grid_size=grid_size,
+                        n_robots=n_robots,
+                        n_targets=n_targets,
+                        failure_schedule=failure_schedule,
+                        rng_seed=run_seed,
+                        robot_seed=robot_seed,
+                        robot_radius=config_experiments.ROBOT_RADIUS
+                    )
+                    
+                    # Inject IDs and constants to create new columns in the DataFrame
+                    result["failure_time_mode"] = failure_time_mode
+                    result["experiment_id"] = exp_idx
+                    result["simulation_id"] = sim_idx
+                    result["num_experiments"] = NUM_EXPERIMENTS
+                    result["num_simulations"] = NUM_SIMULATION
+                    
+                    print(f't_targets: {result["t_targets"]}, t_coverage: {result["t_coverage"]}, percent_coverage: {result["percent_coverage"]:.2f}%, mean_found: {result["mean_found"]:.4f}')
+                    rows.append(result)
     
     df = pd.DataFrame(rows)
     
     summary = (
-        df.groupby(["grid_size", "n_robots", "n_failures"], as_index=False)
+        df.groupby(["grid_size", "n_robots", "n_failures", "failure_time_mode"], as_index=False)
           .agg(
               total_runs=("t_targets", "size"),
               avg_n_targets_found=("n_targets_found", "mean"),
@@ -172,7 +185,8 @@ def run_experiments():
     with pd.ExcelWriter(xlsx_path, engine="xlsxwriter") as writer:
         # Reorder columns slightly to make it readable in Excel
         cols = df.columns.tolist()
-        cols = ['grid_size', 'n_robots', 'n_targets', 'n_failures', 'num_experiments', 'num_simulations', 'experiment_id', 'simulation_id'] + [c for c in cols if c not in ['grid_size', 'n_robots', 'n_targets', 'n_failures', 'num_experiments', 'num_simulations', 'experiment_id', 'simulation_id']]
+        lead_cols = ['grid_size', 'n_robots', 'n_targets', 'n_failures', 'failure_time_mode', 'num_experiments', 'num_simulations', 'experiment_id', 'simulation_id']
+        cols = lead_cols + [c for c in cols if c not in lead_cols]
         df = df[cols]
         
         df.to_excel(writer, index=False, sheet_name="detailed")
