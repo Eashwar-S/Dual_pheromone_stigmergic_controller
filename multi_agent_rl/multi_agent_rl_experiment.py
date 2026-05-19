@@ -13,7 +13,7 @@ PROJECT_ROOT = CURRENT_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(CURRENT_DIR))
 
-from common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
+from common.utilities import mark_visible, discover_targets_in_vnhood
 import config_experiments
 from environment import MultiAgentGridEnv
 from model import DQNPolicy
@@ -22,27 +22,21 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
                    failure_schedule: List[Tuple[int, int]], rng_seed: int,
                    robot_seed: int, robot_radius: int, policy_net, device) -> Dict[str, object]:
     
-    rng = np.random.default_rng(rng_seed)
     random.seed(robot_seed)
     torch.manual_seed(robot_seed)
     
     W = H = grid_size
     max_horizon = config_experiments.calculate_horizon(grid_size, n_robots)
     
-    env = MultiAgentGridEnv(grid_size=grid_size, num_agents=n_robots, num_targets=n_targets, num_obstacles=0)
-    env.reset()
-    
-    start_positions = config_experiments.generate_robot_positions(grid_size, n_robots, rng)
-    env.agents = {i: start_positions[i] for i in range(n_robots)}
-    
-    initial_targets = generate_unique_targets(grid_size, n_targets, rng)
-    env.targets = set(initial_targets)
-    env.obstacles = set()
-    env.visited_memory = {i: np.zeros((grid_size, grid_size)) for i in range(n_robots)}
-    for i, pos in env.agents.items():
-        env.visited_memory[i][pos] = 1
-        
-    obs_dict = env._get_all_observations()
+    env = MultiAgentGridEnv(
+        grid_size=grid_size,
+        num_agents=n_robots,
+        num_targets=n_targets,
+        num_obstacles=0,
+        seed=rng_seed,
+    )
+    obs_dict = env.reset(seed=rng_seed)
+    initial_targets = set(env.targets)
 
     found_targets: Set[Tuple[int, int]] = set()
     covered_global = np.zeros((H, W), dtype=bool)
@@ -57,6 +51,10 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     auc_cov, auc_found = 0.0, 0.0
     steps = 0
     failed_robots = set()
+
+    for pos in env.agents.values():
+        mark_visible(covered_global, pos[0], pos[1], robot_radius)
+        discover_targets_in_vnhood(pos[0], pos[1], initial_targets, found_targets, W, H, robot_radius)
     
     while steps < max_horizon:
         if steps in fail_map:
@@ -121,7 +119,7 @@ def run_experiments():
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     policy_net = DQNPolicy(input_channels=4, fov_size=3, action_space=4).to(device)
-    checkpoint_path = Path("checkpoints/best_policy.pth")
+    checkpoint_path = CURRENT_DIR / "checkpoints" / "best_policy.pth"
     if checkpoint_path.exists():
         policy_net.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
         policy_net.eval()
