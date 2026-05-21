@@ -1,0 +1,40 @@
+{
+  "os":  "Windows-10-10.0.26100-SP0",
+  "python":  "CPython 3.9.0",
+  "startedAt":  "2026-05-21T02:46:00.077933Z",
+  "program":  "C:\\Users\\eashw\\Desktop\\post_graduation_plan\\Collaborations\\Swarm_collaboration_via_stigmergy\\multi_agent_rl\\train.py",
+  "codePath":  "multi_agent_rl\\train.py",
+  "codePathLocal":  "train.py",
+  "git":  {
+    "remote":  "https://github.com/Eashwar-S/Swarm_collaboration_via_stigmergy.git",
+    "commit":  "7e6c122621040bb88206b2a612359c689a0ac4ee"
+  },
+  "email":  "eashwar@umd.edu",
+  "root":  "C:\\Users\\eashw\\Desktop\\post_graduation_plan\\Collaborations\\Swarm_collaboration_via_stigmergy\\multi_agent_rl",
+  "host":  "Eashwar",
+  "executable":  "C:\\Users\\eashw\\AppData\\Local\\Programs\\Python\\Python39\\python.exe",
+  "cpu_count":  8,
+  "cpu_count_logical":  16,
+  "gpu":  "NVIDIA GeForce RTX 3080 Laptop GPU",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "1021821579264",
+      "used":  "913987837952"
+    }
+  },
+  "memory":  {
+    "total":  "34048368640"
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA GeForce RTX 3080 Laptop GPU",
+      "memoryTotal":  "17179869184",
+      "cudaCores":  6144,
+      "architecture":  "Ampere",
+      "uuid":  "GPU-c3625721-4190-b411-5053-4ba1cad4d876"
+    }
+  ],
+  "cudaVersion":  "12.8",
+  "writerId":  "r5ls9xdl9tsvisgr1e9jpjz0f7ixlxx9"
+}
