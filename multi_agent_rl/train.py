@@ -3,14 +3,11 @@ import os
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
-import random
-from pathlib import Path
 from environment import MultiAgentGridEnv
 from model import DQNPolicy, ReplayBuffer
 
 def train():
     # Hyperparameters
-    seed = 42
     num_episodes = 2000
     batch_size = 64
     gamma = 0.99
@@ -21,16 +18,12 @@ def train():
     target_update_freq = 10
     episode_length = 500
     
-    checkpoint_dir = Path(__file__).resolve().parent / "checkpoints"
-    checkpoint_path = checkpoint_dir / "best_policy.pth"
+    checkpoint_dir = "checkpoints"
+    checkpoint_path = f"{checkpoint_dir}/best_policy.pth"
     os.makedirs(checkpoint_dir, exist_ok=True)
     best_reward = -float('inf')
-    rng = np.random.default_rng(seed)
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
 
-    env = MultiAgentGridEnv(grid_size=100, num_agents=10, num_targets=20, num_obstacles=0, seed=seed)
+    env = MultiAgentGridEnv(grid_size=100, num_agents=10, num_targets=20, num_obstacles=0)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     policy_net = DQNPolicy().to(device)
@@ -52,7 +45,7 @@ def train():
     epsilon = epsilon_start
 
     for episode in range(num_episodes):
-        obs_dict = env.reset(seed=seed + episode)
+        obs_dict = env.reset()
         done = False
         total_reward = 0
         step_count = 0
@@ -62,8 +55,8 @@ def train():
             
             # Select actions for all agents
             for agent_id, obs in obs_dict.items():
-                if rng.random() < epsilon:
-                    action_dict[agent_id] = int(rng.integers(4))
+                if np.random.rand() < epsilon:
+                    action_dict[agent_id] = np.random.randint(4)
                 else:
                     obs_tensor = torch.FloatTensor(obs).unsqueeze(0).to(device)
                     with torch.no_grad():
@@ -114,12 +107,12 @@ def train():
             # Save if this is the best performing policy so far
             if total_reward > best_reward:
                 best_reward = total_reward
-                torch.save(policy_net.state_dict(), checkpoint_path)
+                torch.save(policy_net.state_dict(), "checkpoints/best_policy.pth")
                 print(f"--> New best model saved! (Reward: {best_reward:.2f})")
     
     # Save the final state at the very end of the loop
-    torch.save(policy_net.state_dict(), checkpoint_dir / "final_policy.pth")
-    print(f"Training complete. Models saved to {checkpoint_dir}.")
+    torch.save(policy_net.state_dict(), "checkpoints/final_policy.pth")
+    print("Training complete. Models saved to /checkpoints.")
 
 if __name__ == "__main__":
     train()

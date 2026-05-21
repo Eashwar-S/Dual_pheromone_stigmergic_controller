@@ -13,7 +13,7 @@ PROJECT_ROOT = CURRENT_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(CURRENT_DIR))
 
-from common.utilities import mark_visible, discover_targets_in_vnhood
+from common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
 import config_experiments
 from environment import MultiAgentGridEnv
 from model import DQNPolicy
@@ -22,21 +22,27 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
                    failure_schedule: List[Tuple[int, int]], rng_seed: int,
                    robot_seed: int, robot_radius: int, policy_net, device) -> Dict[str, object]:
     
+    rng = np.random.default_rng(rng_seed)
     random.seed(robot_seed)
     torch.manual_seed(robot_seed)
     
     W = H = grid_size
     max_horizon = config_experiments.calculate_horizon(grid_size, n_robots)
     
-    env = MultiAgentGridEnv(
-        grid_size=grid_size,
-        num_agents=n_robots,
-        num_targets=n_targets,
-        num_obstacles=0,
-        seed=rng_seed,
-    )
-    obs_dict = env.reset(seed=rng_seed)
-    initial_targets = set(env.targets)
+    env = MultiAgentGridEnv(grid_size=grid_size, num_agents=n_robots, num_targets=n_targets, num_obstacles=0)
+    env.reset()
+    
+    start_positions = config_experiments.generate_robot_positions(grid_size, n_robots, rng)
+    env.agents = {i: start_positions[i] for i in range(n_robots)}
+    
+    initial_targets = generate_unique_targets(grid_size, n_targets, rng)
+    env.targets = set(initial_targets)
+    env.obstacles = set()
+    env.visited_memory = {i: np.zeros((grid_size, grid_size)) for i in range(n_robots)}
+    for i, pos in env.agents.items():
+        env.visited_memory[i][pos] = 1
+        
+    obs_dict = env._get_all_observations()
 
     found_targets: Set[Tuple[int, int]] = set()
     covered_global = np.zeros((H, W), dtype=bool)
@@ -51,10 +57,6 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     auc_cov, auc_found = 0.0, 0.0
     steps = 0
     failed_robots = set()
-
-    for pos in env.agents.values():
-        mark_visible(covered_global, pos[0], pos[1], robot_radius)
-        discover_targets_in_vnhood(pos[0], pos[1], initial_targets, found_targets, W, H, robot_radius)
     
     while steps < max_horizon:
         if steps in fail_map:
@@ -119,7 +121,7 @@ def run_experiments():
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     policy_net = DQNPolicy(input_channels=4, fov_size=3, action_space=4).to(device)
-    checkpoint_path = CURRENT_DIR / "checkpoints" / "best_policy.pth"
+    checkpoint_path = Path("checkpoints/best_policy.pth")
     if checkpoint_path.exists():
         policy_net.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
         policy_net.eval()
@@ -129,10 +131,8 @@ def run_experiments():
     
     rows: List[Dict[str, object]] = []
     configs_list = config_experiments.get_experiment_configs()
-    is_failure_experiment = any(cfg[3] > 0 for cfg in configs_list)
-    failure_time_modes = list(config_experiments.FAILURE_TIME_WINDOWS) if is_failure_experiment else [config_experiments.FAILURE_TIME_MODE]
 
-    if is_failure_experiment:
+    if configs_list and configs_list[0][3] > 0:
         xlsx_path = output_path / "E2/results.xlsx"
         dir_path = output_path / "E2"
     else:
@@ -142,51 +142,40 @@ def run_experiments():
 
     for grid_size, n_robots, n_targets, n_failures in configs_list:
         max_horizon = config_experiments.calculate_horizon(grid_size, n_robots)
-        modes_for_config = failure_time_modes if n_failures > 0 else [config_experiments.FAILURE_TIME_MODE]
-
-        for failure_time_mode in modes_for_config:
-            schedule_seed = 42 
-            rng_sched = np.random.default_rng(schedule_seed)
-            failure_schedule = config_experiments.make_random_failure_schedule(
-                grid_size=grid_size,
-                n_robots=n_robots,
-                n_failures=n_failures,
-                rng=rng_sched,
-                max_horizon=max_horizon,
-                failure_time_mode=failure_time_mode,
-            )
-            
-            for exp_idx in range(1, NUM_EXPERIMENTS + 1): 
-                run_seed = schedule_seed + exp_idx
-                for sim_idx in range(1, NUM_SIMULATIONS + 1):
-                    robot_seed = run_seed * 1000 + sim_idx 
-                    
-                    print(f"Running MARL Experiment: grid={grid_size}, robots={n_robots}, targets={n_targets}, failures={n_failures}, failure_time_mode={failure_time_mode}, exp={exp_idx}, sim={sim_idx}")
-                    
-                    result = run_simulation(
-                        grid_size=grid_size,
-                        n_robots=n_robots,
-                        n_targets=n_targets,
-                        failure_schedule=failure_schedule,
-                        rng_seed=run_seed,
-                        robot_seed=robot_seed,
-                        robot_radius=config_experiments.ROBOT_RADIUS,
-                        policy_net=policy_net,
-                        device=device
-                    )
-                    
-                    result["failure_time_mode"] = failure_time_mode
-                    result["experiment_id"] = exp_idx
-                    result["simulation_id"] = sim_idx
-                    result["num_experiments"] = NUM_EXPERIMENTS
-                    result["num_simulations"] = NUM_SIMULATIONS
-                    
-                    rows.append(result)
+        schedule_seed = 42 
+        rng_sched = np.random.default_rng(schedule_seed)
+        failure_schedule = config_experiments.make_random_failure_schedule(n_robots, n_failures, rng_sched, max_horizon)
+        
+        for exp_idx in range(1, NUM_EXPERIMENTS + 1): 
+            run_seed = schedule_seed + exp_idx
+            for sim_idx in range(1, NUM_SIMULATIONS + 1):
+                robot_seed = run_seed * 1000 + sim_idx 
+                
+                print(f"Running MARL Experiment: grid={grid_size}, robots={n_robots}, targets={n_targets}, failures={n_failures}, exp={exp_idx}, sim={sim_idx}")
+                
+                result = run_simulation(
+                    grid_size=grid_size,
+                    n_robots=n_robots,
+                    n_targets=n_targets,
+                    failure_schedule=failure_schedule,
+                    rng_seed=run_seed,
+                    robot_seed=robot_seed,
+                    robot_radius=config_experiments.ROBOT_RADIUS,
+                    policy_net=policy_net,
+                    device=device
+                )
+                
+                result["experiment_id"] = exp_idx
+                result["simulation_id"] = sim_idx
+                result["num_experiments"] = NUM_EXPERIMENTS
+                result["num_simulations"] = NUM_SIMULATIONS
+                
+                rows.append(result)
     
     df = pd.DataFrame(rows)
     
     summary = (
-        df.groupby(["grid_size", "n_robots", "n_failures", "failure_time_mode"], as_index=False)
+        df.groupby(["grid_size", "n_robots", "n_failures"], as_index=False)
           .agg(
               total_runs=("t_targets", "size"),
               avg_n_targets_found=("n_targets_found", "mean"),
@@ -199,8 +188,7 @@ def run_experiments():
     
     with pd.ExcelWriter(xlsx_path, engine="xlsxwriter") as writer:
         cols = df.columns.tolist()
-        lead_cols = ['grid_size', 'n_robots', 'n_targets', 'n_failures', 'failure_time_mode', 'num_experiments', 'num_simulations', 'experiment_id', 'simulation_id']
-        cols = lead_cols + [c for c in cols if c not in lead_cols]
+        cols = ['grid_size', 'n_robots', 'n_targets', 'n_failures', 'num_experiments', 'num_simulations', 'experiment_id', 'simulation_id'] + [c for c in cols if c not in ['grid_size', 'n_robots', 'n_targets', 'n_failures', 'num_experiments', 'num_simulations', 'experiment_id', 'simulation_id']]
         df = df[cols]
         
         df.to_excel(writer, index=False, sheet_name="detailed")
