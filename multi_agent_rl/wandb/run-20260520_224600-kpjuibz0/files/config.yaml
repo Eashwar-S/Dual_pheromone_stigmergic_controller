@@ -1,0 +1,120 @@
+_wandb:
+    value:
+        cli_version: 0.23.1
+        e:
+            r5ls9xdl9tsvisgr1e9jpjz0f7ixlxx9:
+                codePath: multi_agent_rl\train.py
+                codePathLocal: train.py
+                cpu_count: 8
+                cpu_count_logical: 16
+                cudaVersion: "12.8"
+                disk:
+                    /:
+                        total: "1021821579264"
+                        used: "913987837952"
+                email: eashwar@umd.edu
+                executable: C:\Users\eashw\AppData\Local\Programs\Python\Python39\python.exe
+                git:
+                    commit: 7e6c122621040bb88206b2a612359c689a0ac4ee
+                    remote: https://github.com/Eashwar-S/Swarm_collaboration_via_stigmergy.git
+                gpu: NVIDIA GeForce RTX 3080 Laptop GPU
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 6144
+                      memoryTotal: "17179869184"
+                      name: NVIDIA GeForce RTX 3080 Laptop GPU
+                      uuid: GPU-c3625721-4190-b411-5053-4ba1cad4d876
+                host: Eashwar
+                memory:
+                    total: "34048368640"
+                os: Windows-10-10.0.26100-SP0
+                program: C:\Users\eashw\Desktop\post_graduation_plan\Collaborations\Swarm_collaboration_via_stigmergy\multi_agent_rl\train.py
+                python: CPython 3.9.0
+                root: C:\Users\eashw\Desktop\post_graduation_plan\Collaborations\Swarm_collaboration_via_stigmergy\multi_agent_rl
+                startedAt: "2026-05-21T02:46:00.077933Z"
+                writerId: r5ls9xdl9tsvisgr1e9jpjz0f7ixlxx9
+        m: []
+        python_version: 3.9.0
+        t:
+            "1":
+                - 1
+            "2":
+                - 1
+            "3":
+                - 16
+                - 61
+            "4": 3.9.0
+            "5": 0.23.1
+            "8":
+                - 3
+            "12": 0.23.1
+            "13": windows-amd64
+batch_size:
+    value: 64
+checkpoint_dir:
+    value: checkpoints
+device:
+    value: cuda
+episode_length:
+    value: 1000
+episodes:
+    value: 2000
+epsilon_decay:
+    value: 0.995
+epsilon_end:
+    value: 0.05
+epsilon_start:
+    value: 1
+eval_episodes_per_config:
+    value: 2
+eval_freq:
+    value: 50
+gamma:
+    value: 0.99
+grid_sizes:
+    value:
+        - 50
+        - 100
+        - 150
+        - 200
+        - 250
+        - 300
+        - 350
+        - 400
+        - 450
+        - 500
+lr:
+    value: 0.0001
+num_configs:
+    value: 10
+resume:
+    value: false
+robot_counts:
+    value:
+        - 5
+        - 10
+        - 15
+        - 20
+        - 25
+        - 30
+        - 35
+        - 40
+        - 45
+        - 50
+seed:
+    value: 42
+target_counts:
+    value:
+        - 15
+        - 30
+        - 45
+        - 60
+        - 75
+        - 90
+        - 105
+        - 120
+        - 135
+        - 150
+target_update_freq:
+    value: 10
