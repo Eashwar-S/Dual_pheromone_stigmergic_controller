@@ -210,4 +210,5 @@ __marimo__/
 # ignore all .png output files
 output_frames/*
 src/simulations/output_frames/*
+stig_venv
 

@@ -124,7 +124,13 @@ def run_experiments():
         max_horizon = config_experiments.calculate_horizon(grid_size, n_robots)
         schedule_seed = 42 
         rng_sched = np.random.default_rng(schedule_seed)
-        failure_schedule = config_experiments.make_random_failure_schedule(n_robots, n_failures, rng_sched, max_horizon)
+        failure_schedule = config_experiments.make_random_failure_schedule(
+            grid_size,
+            n_robots,
+            n_failures,
+            rng_sched,
+            max_horizon,
+        )
         
         for exp_idx in range(1, NUM_EXPERIMENTS + 1): 
             run_seed = schedule_seed + exp_idx
