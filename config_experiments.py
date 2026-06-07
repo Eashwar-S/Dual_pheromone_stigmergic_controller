@@ -12,8 +12,8 @@ GRID_SIZES = [50, 100, 150, 200, 250, 300, 350, 400, 450, 500]
 ROBOT_COUNTS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 TARGET_COUNTS = [3*r for r in ROBOT_COUNTS]
 # print(TARGET_COUNTS)
-# FAILURE_COUNTS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-FAILURE_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+FAILURE_COUNTS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+# FAILURE_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 # Uncomment to run E2 with failures
 # FAILURE_COUNTS = [1, 2, 3, 4, 5]

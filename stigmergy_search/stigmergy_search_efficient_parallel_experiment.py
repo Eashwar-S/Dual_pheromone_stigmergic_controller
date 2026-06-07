@@ -15,11 +15,13 @@ sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(CURRENT_DIR))
 
 import config_experiments
+from common.experiment_outputs import autosize_excel_columns, split_scalar_and_timeseries, write_timeseries_csvs
 from stigmergy_search_efficient_experiment import run_simulation
 
 
 NUM_EXPERIMENTS = 10
 NUM_SIMULATIONS = 10
+N_CURVE_SAMPLES = 201
 FAILURE_TIME_MODES = ("mixed", "early", "middle", "late")
 
 
@@ -46,6 +48,8 @@ def _run_task(task: Tuple[int, int, int, int, int, str, int, int, List[Tuple[int
         rng_seed=run_seed,
         robot_seed=robot_seed,
         robot_radius=config_experiments.ROBOT_RADIUS,
+        collect_time_series=True,
+        n_curve_samples=N_CURVE_SAMPLES,
     )
 
     result["experiment_id"] = exp_idx
@@ -111,9 +115,10 @@ def _write_results(rows: List[Dict[str, object]]) -> Path:
         dir_path = output_path / "E1"
     dir_path.mkdir(parents=True, exist_ok=True)
 
-    df = pd.DataFrame(rows)
+    scalar_rows, timeseries_rows = split_scalar_and_timeseries(rows, "stigmergy_search_efficient")
+    df = pd.DataFrame(scalar_rows)
     summary = (
-        df.groupby(["grid_size", "n_robots", "n_failures", "failure_time_mode"], as_index=False)
+        df.groupby(["algorithm", "grid_size", "n_robots", "n_failures", "failure_time_mode"], as_index=False)
         .agg(
             total_runs=("t_targets", "size"),
             avg_n_targets_found=("n_targets_found", "mean"),
@@ -121,6 +126,13 @@ def _write_results(rows: List[Dict[str, object]]) -> Path:
             avg_t_coverage=("t_coverage", "mean"),
             avg_percent_coverage=("percent_coverage", "mean"),
             avg_mean_found=("mean_found", "mean"),
+            avg_coverage_auc=("coverage_auc_horizon_norm", "mean"),
+            avg_target_auc=("target_auc_horizon_norm", "mean"),
+            avg_redundancy=("avg_visits_per_covered_cell", "mean"),
+            avg_extra_visits=("extra_visits_per_covered_cell", "mean"),
+            avg_pct_revisited_cells=("pct_revisited_cells", "mean"),
+            success_targets_rate=("success_targets", "mean"),
+            success_coverage_rate=("success_coverage", "mean"),
         )
     )
 
@@ -132,6 +144,7 @@ def _write_results(rows: List[Dict[str, object]]) -> Path:
             "n_targets",
             "n_failures",
             "failure_time_mode",
+            "algorithm",
             "num_experiments",
             "num_simulations",
             "experiment_id",
@@ -142,11 +155,9 @@ def _write_results(rows: List[Dict[str, object]]) -> Path:
         df.to_excel(writer, index=False, sheet_name="detailed")
         summary.to_excel(writer, index=False, sheet_name="summary")
 
-        for sheet_name, frame in [("detailed", df), ("summary", summary)]:
-            ws = writer.sheets[sheet_name]
-            for idx, col in enumerate(frame.columns, 1):
-                max_len = max([len(str(x)) for x in frame[col].astype(str)] + [len(col)])
-                ws.set_column(idx - 1, idx - 1, min(max_len + 2, 60))
+        autosize_excel_columns(writer, [("detailed", df), ("summary", summary)])
+
+    write_timeseries_csvs(timeseries_rows, dir_path)
 
     return xlsx_path
 

@@ -14,6 +14,7 @@ sys.path.insert(0, str(CURRENT_DIR))
 from common.utilities import generate_unique_targets, mark_visible, discover_targets_in_vnhood
 from common.geometry import manhattan_path
 from common.communication_tracker import CommunicationTracker
+from common.experiment_metrics import TimeSeriesSampler, first_last_failures, scalar_metrics
 from partitioning import lloyd_balanced
 from lawnmower_pattern import generate_sweep_path_for_region
 from robot import Robot
@@ -42,7 +43,9 @@ def takeover_append_path(robots: List[Robot], takeover_id: int, failed_id: int):
 
 def run_simulation(grid_size: int, n_robots: int, n_targets: int,
                    failure_schedule: List[Tuple[int, int]], rng_seed: int,
-                   robot_radius: int) -> Dict[str, object]:
+                   robot_radius: int,
+                   collect_time_series: bool = False,
+                   n_curve_samples: int = 201) -> Dict[str, object]:
     """Run headless centralized simulation and return comprehensive metrics."""
     rng = np.random.default_rng(rng_seed)
     W = H = grid_size
@@ -99,6 +102,7 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     fail_map: Dict[int, List[int]] = {}
     for rid, st in norm_sched:
         fail_map.setdefault(st, []).append(rid)
+    failed_robot_ids, failure_steps, first_failure_step, last_failure_step = first_last_failures(norm_sched)
     
     from collections import deque
     pending_failures = deque()
@@ -112,6 +116,22 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     
     auc_cov = 0.0
     auc_found = 0.0
+    targets_found_at_first_failure = None
+    coverage_fraction_at_first_failure = None
+    post_failure_cov_sum = 0.0
+    post_failure_found_sum = 0.0
+    post_failure_steps = 0
+    sampler = TimeSeriesSampler(max_horizon, n_curve_samples) if collect_time_series else None
+    if sampler is not None:
+        sampler.record(
+            step=0,
+            coverage_cells=0,
+            total_cells=total_cells,
+            targets_found=0,
+            total_targets=len(targets),
+            active_robots=n_robots,
+            visit_counts=covered,
+        )
     
     steps = 0
     while steps < max_horizon:
@@ -161,6 +181,25 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
         
         auc_cov += coverage_fraction
         auc_found += targets_fraction
+
+        if first_failure_step is not None and steps > first_failure_step:
+            if targets_found_at_first_failure is None:
+                targets_found_at_first_failure = len(found_targets)
+                coverage_fraction_at_first_failure = coverage_fraction
+            post_failure_cov_sum += coverage_fraction
+            post_failure_found_sum += targets_fraction
+            post_failure_steps += 1
+
+        if sampler is not None:
+            sampler.record(
+                step=steps,
+                coverage_cells=int(current_coverage),
+                total_cells=total_cells,
+                targets_found=len(found_targets),
+                total_targets=len(targets),
+                active_robots=sum(1 for r in robots if not r.failed),
+                visit_counts=covered,
+            )
         
         if len(found_targets) >= len(targets) and t_targets == max_horizon:
             t_targets = steps
@@ -188,33 +227,52 @@ def run_simulation(grid_size: int, n_robots: int, n_targets: int,
     current_coverage = np.sum(covered > 0)
     percent_coverage = (current_coverage / total_cells) * 100.0
 
-    return {
+    result = {
         "grid_size": grid_size,
         "n_robots": n_robots,
         "n_targets": len(targets),
         "n_failures": len(norm_sched),
-        # "failed_robot_ids": ";".join(map(str, [rid for rid, _ in norm_sched])),
-        # "fail_steps": ";".join(map(str, [st for _, st in norm_sched])),
         "n_targets_found": len(found_targets),
         "t_targets": t_targets,
         "t_coverage": t_coverage,
         "percent_coverage": percent_coverage,
         "mean_found": mean_found,
-        # "t_end": t_end,
-        # "success_targets": success_targets,
-        # "success_coverage": success_coverage,
-        # "success_both": success_both,
-        # "auc_cov": auc_cov,
-        # "mean_cov": mean_cov,
-        # "auc_found": auc_found,
-        # "pct_revisited": pct_revisited,
-        # # Communication bandwidth metrics
-        # "total_messages": comm_metrics['total_messages'],
-        # "total_bandwidth_bytes": comm_metrics['total_bandwidth_bytes'],
-        # "peak_messages_per_step": comm_metrics['peak_messages_per_step'],
-        # "peak_bandwidth_bytes": comm_metrics['peak_bandwidth_bytes'],
-        # "avg_messages_per_step": comm_metrics['avg_messages_per_step'],
     }
+    result.update(
+        scalar_metrics(
+            max_horizon=max_horizon,
+            steps_executed=t_end,
+            total_cells=total_cells,
+            final_coverage_cells=int(current_coverage),
+            n_targets=len(targets),
+            n_targets_found=len(found_targets),
+            auc_cov_sum=auc_cov,
+            auc_found_sum=auc_found,
+            visit_counts=covered,
+            t_targets=t_targets,
+            t_coverage=t_coverage,
+            first_failure_step=first_failure_step,
+            last_failure_step=last_failure_step,
+            failed_robot_ids=failed_robot_ids,
+            failure_steps=failure_steps,
+            targets_found_at_first_failure=targets_found_at_first_failure,
+            coverage_fraction_at_first_failure=coverage_fraction_at_first_failure,
+            post_failure_cov_sum=post_failure_cov_sum,
+            post_failure_found_sum=post_failure_found_sum,
+            post_failure_steps=post_failure_steps,
+        )
+    )
+    if sampler is not None:
+        result["_time_series"] = sampler.finalize(
+            step=t_end,
+            coverage_cells=int(current_coverage),
+            total_cells=total_cells,
+            targets_found=len(found_targets),
+            total_targets=len(targets),
+            active_robots=sum(1 for r in robots if not r.failed),
+            visit_counts=covered,
+        )
+    return result
 
 
 def run_experiments():
