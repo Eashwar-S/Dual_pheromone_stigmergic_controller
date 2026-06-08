@@ -9,6 +9,7 @@ The three main algorithm folders are:
 - `centralized/`: centralized coordination. Robots receive planned coverage regions and follow generated search paths.
 - `random_walk/`: decentralized memoryless random walk baseline. Robots move randomly while respecting collision constraints.
 - `stigmergy_search/`: decentralized stigmergy search with pheromone-guided movement.
+- `stigmergy_convergence/`: rendezvous/convergence experiment. One advertising robot starts at the center target and deposits a non-evaporating attractive spiral pheromone trail while search robots use repulsive search until they detect and follow the attractive field.
 
 Shared support code is organized as:
 
@@ -21,6 +22,7 @@ Important experiment entry points are:
 - `centralized/centralized_parallel_experiment.py`
 - `random_walk/random_walk_parallel_experiment.py`
 - `stigmergy_search/stigmergy_search_efficient_parallel_experiment.py`
+- `stigmergy_convergence/rendezvous_parallel_experiment.py`
 
 The non-parallel `_experiment.py` files remain available for direct single-process runs and visualization support.
 
@@ -89,6 +91,12 @@ Stigmergy search:
 python stigmergy_search/stigmergy_search_efficient_parallel_experiment.py --workers 8
 ```
 
+Rendezvous convergence:
+
+```bash
+python stigmergy_convergence/rendezvous_parallel_experiment.py --workers 8
+```
+
 If `--workers` is omitted, each script defaults to the detected CPU count.
 
 For E2, the parallel scripts run four failure timing modes automatically:
@@ -108,6 +116,14 @@ python random_walk/random_walk_experiment.py --visualize
 python stigmergy_search/stigmergy_search_efficient_experiment.py --visualize
 ```
 
+Rendezvous convergence visualization:
+
+```bash
+python stigmergy_convergence/rendezvous_visualization.py --search-robots 3 --distance-shell 40 --grid-size 100
+```
+
+`--search-robots` controls how many search robots are spawned. `--distance-shell` requests the Manhattan distance from the target for the initial search robot positions.
+
 ## Output Storage
 
 Parallel experiment outputs are written under the current working directory. When commands are run from the repository root, the output folders are:
@@ -115,6 +131,7 @@ Parallel experiment outputs are written under the current working directory. Whe
 - `experiment_results/E1/` or `experiment_results/E2/` for centralized.
 - `experiment_results_stigmergy/E1/` or `experiment_results_stigmergy/E2/` for random walk.
 - `experiment_results_stigmergy_efficient/E1/` or `experiment_results_stigmergy_efficient/E2/` for stigmergy search.
+- `experiment_results_rendezvous/` for rendezvous convergence.
 
 Each E1/E2 folder contains:
 
@@ -178,3 +195,60 @@ Important columns include:
 - Curve values: `coverage_cells`, `coverage_fraction`, `targets_found`, `target_fraction`, `active_robots`, `avg_visits_per_covered_cell`, and `pct_revisited_cells`.
 
 `timeseries_summary.csv` groups the sampled curves by scenario and time sample. It stores mean, standard deviation, count, and standard error columns for graph creation.
+
+## Rendezvous Convergence Experiment
+
+The rendezvous experiment is designed to measure convergence toward a known target through attractive pheromone following. One advertising robot starts at the target in the center of the grid and moves outward in a spiral while depositing attractive pheromone. Search robots are initialized away from the target, perform the repulsive search behavior, and switch to attractive following when they sense the attractive trail.
+
+The parallel experiment uses:
+
+- Grid sizes: `50` and `100`.
+- Search robot counts: `1`, `2`, and `3`.
+- Requested Manhattan distance shells from the target: `20`, `30`, `40`, and `50`.
+- Repetitions per shell: `10`, using the same spawn positions with different algorithm seeds.
+- Total simulations: `2 * 3 * 4 * 10 = 240`.
+
+Search robot starts are constrained to be at least `20` cells from the target. If an exact requested shell does not have enough valid cells for all search robots, the nearest shell with enough valid cells is used, while `requested_distance_shell` remains recorded for grouping.
+
+Run it from the repository root:
+
+```bash
+python stigmergy_convergence/rendezvous_parallel_experiment.py --workers 8
+```
+
+Outputs are written to `experiment_results_rendezvous/`:
+
+- `results.xlsx`: workbook with scalar run summaries.
+- `search_robot_paths.csv`: per-step robot positions for reconstructing paths.
+- `swarm_convergence.csv`: per-step swarm-level convergence curves.
+- `search_robot_metrics.csv`: per-robot convergence metrics.
+
+`results.xlsx` contains:
+
+- `detailed`: one row per simulation.
+- `summary`: grouped by `grid_size`, `n_search_robots`, and `requested_distance_shell`; includes `success_rate_by_distance` and average convergence metrics.
+- `robot_metrics`: one row per search robot per simulation.
+
+`search_robot_paths.csv` is the path reconstruction table. Important columns are:
+
+- Identity: `grid_size`, `n_search_robots`, `requested_distance_shell`, `spawn_position_id`, `algorithm_seed`, and `search_robot_id`.
+- Time and state: `step`, `search_x`, `search_y`, `mode`, and `attractive_detected`.
+- Distance curve: `distance_to_target`.
+
+`swarm_convergence.csv` is graph-ready for convergence curves. It stores:
+
+- `min_distance_to_target_over_time`: closest search robot distance to the target at each step.
+- `mean_distance_to_target_over_time`: average search robot distance to the target at each step.
+- `found`: whether the target has been found by that timestep.
+
+`search_robot_metrics.csv` stores per-robot metrics:
+
+- `time_to_attractive_detection`: first timestep when that robot senses attractive pheromone.
+- `time_from_detection_to_target`: steps from first attractive detection to reaching the target.
+- `mode_switch_step`: first timestep when that robot switches from search to follow.
+- `path_efficiency`: initial Manhattan distance divided by actual steps to target.
+- `post_detection_path_efficiency`: distance at detection divided by steps from detection to target.
+- `convergence_rate`: distance decrease per step after attractive detection.
+- `stagnation_count`: number of steps where distance to target did not improve.
+- `post_detection_stagnation_count`: stagnation after attractive detection.
+- `final_distance`: final Manhattan distance to the target if the robot did not find it.
