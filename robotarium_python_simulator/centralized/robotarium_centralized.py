@@ -1,14 +1,19 @@
 import argparse
+from collections import deque
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
 import sys
 
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Rectangle
 
 # SIM_ROOT = Path(__file__).resolve().parent
 # PROJECT_ROOT = SIM_ROOT.parent
-# if str(PROJECT_ROOT) not in sys.path:
-#     sys.path.insert(0, str(PROJECT_ROOT))
+# REPO_ROOT = PROJECT_ROOT.parent
+# sys.path.insert(0, str(SIM_ROOT))
+# sys.path.insert(0, str(PROJECT_ROOT))
+# sys.path.insert(0, str(REPO_ROOT))
 
 from lawnmower_pattern import generate_sweep_path_for_region
 from partitioning import lloyd_balanced
@@ -22,6 +27,36 @@ SIDE_BUFFER_CELLS = 1
 YIELD_DISTANCE = 0.22
 MIN_GOAL_SEPARATION = 0.16
 YIELD_PERIOD_STEPS = 50
+TAKEOVER_JOIN_SPACING_CELLS = 2.5
+
+
+def get_robotarium_axes(r):
+    return (
+        getattr(r, "_axes_handle", None)
+        or getattr(r, "axes_handle", None)
+        or getattr(r, "axes", None)
+        or getattr(r, "ax", None)
+        or (plt.gca() if plt.get_fignums() else None)
+    )
+
+
+def get_robotarium_figure(r):
+    return (
+        getattr(r, "_figure_handle", None)
+        or getattr(r, "figure_handle", None)
+        or getattr(r, "figure", None)
+        or getattr(r, "fig", None)
+        or (plt.gcf() if plt.get_fignums() else None)
+    )
+
+
+def normalize_robotarium_plot_handles(r) -> None:
+    ax = get_robotarium_axes(r)
+    fig = get_robotarium_figure(r)
+    if ax is not None and not hasattr(r, "_axes_handle"):
+        r._axes_handle = ax
+    if fig is not None and not hasattr(r, "_figure_handle"):
+        r._figure_handle = fig
 
 
 def _path_to_world_arrays(path: List[Tuple[int, int]]) -> Tuple[List[float], List[float]]:
@@ -96,17 +131,97 @@ def make_unicycle_waypoint_path(path: List[Tuple[int, int]]) -> np.ndarray:
     return _resample_world_path(smoothed, spacing)
 
 
+def manhattan_grid_path(start: Tuple[int, int], end: Tuple[int, int]) -> List[Tuple[int, int]]:
+    path = [start]
+    x, y = start
+    ex, ey = end
+    while x != ex:
+        x += 1 if ex > x else -1
+        path.append((x, y))
+    while y != ey:
+        y += 1 if ey > y else -1
+        path.append((x, y))
+    return path
+
+
+def make_join_path(start_grid: Tuple[int, int], end_grid: Tuple[int, int],
+                   end_world: np.ndarray) -> np.ndarray:
+    nav_grid = manhattan_grid_path(start_grid, end_grid)
+    points = np.array([grid_to_world(gx, gy) for gx, gy in nav_grid], dtype=float)
+    if len(points) == 0:
+        points = np.array([end_world], dtype=float)
+    else:
+        points[-1] = end_world
+    spacing = TAKEOVER_JOIN_SPACING_CELLS * min(CELL_WIDTH, CELL_HEIGHT)
+    return _resample_world_path(points, spacing)
+
+
+def append_world_path(base_path: np.ndarray, extension: np.ndarray) -> np.ndarray:
+    if extension.size == 0:
+        return base_path
+    if base_path.size == 0:
+        return extension
+    if np.linalg.norm(base_path[-1] - extension[0]) <= 1e-9:
+        extension = extension[1:]
+    if extension.size == 0:
+        return base_path
+    return np.vstack((base_path, extension))
+
+
+def append_failed_waypoints_to_finisher(takeover_id: int, failed_id: int,
+                                        x_si: np.ndarray,
+                                        waypoint_paths: List[np.ndarray],
+                                        waypoint_indices: List[int]) -> None:
+    takeover_path = waypoint_paths[takeover_id]
+    failed_path = waypoint_paths[failed_id]
+    if takeover_path.size == 0 or failed_path.size == 0:
+        return
+
+    takeover_end = takeover_path[-1]
+    failed_stop = x_si[:, failed_id].copy()
+    takeover_end_grid = world_to_grid(float(takeover_end[0]), float(takeover_end[1]))
+    failed_stop_grid = world_to_grid(float(failed_stop[0]), float(failed_stop[1]))
+    extension = make_join_path(takeover_end_grid, failed_stop_grid, failed_stop)
+
+    remaining_idx = min(waypoint_indices[failed_id], len(failed_path) - 1)
+    failed_remaining = failed_path[remaining_idx:]
+    extension = append_world_path(extension, failed_remaining)
+
+    waypoint_paths[takeover_id] = append_world_path(takeover_path, extension)
+
+
+def assign_pending_failures_to_finishers(pending_failures, x_si: np.ndarray,
+                                         waypoint_paths: List[np.ndarray],
+                                         waypoint_indices: List[int],
+                                         failed_robot_ids: Set[int],
+                                         takeover_log: Dict[int, int]) -> None:
+    if not pending_failures:
+        return
+    finishers = [
+        robot_id
+        for robot_id in range(N_ROBOTS)
+        if robot_id not in failed_robot_ids
+        and waypoint_indices[robot_id] >= len(waypoint_paths[robot_id]) - 1
+    ]
+    for takeover_id in finishers:
+        if not pending_failures:
+            break
+        failed_id = pending_failures.popleft()
+        append_failed_waypoints_to_finisher(
+            takeover_id,
+            failed_id,
+            x_si,
+            waypoint_paths,
+            waypoint_indices,
+        )
+        takeover_log[failed_id] = takeover_id
+        print(f"Centralized takeover: robot {takeover_id} assigned remaining path from failed robot {failed_id}")
+
+
 def add_planned_path_plots(r, waypoint_paths: List[np.ndarray], show_figure: bool):
     if not show_figure:
         return None
-    ax = r._axes_handle
-    followed_lines = []
-    for waypoint_path in waypoint_paths:
-        xs, ys = _world_path_to_arrays(waypoint_path)
-        ax.plot(xs, ys, color="0.68", linewidth=1.1, alpha=0.7, zorder=-1)
-        followed_line, = ax.plot([], [], color="0.20", linewidth=1.8, alpha=0.95, zorder=1)
-        followed_lines.append(followed_line)
-    return followed_lines
+    return None
 
 
 def refresh_followed_path_plots(path_plots, waypoint_paths: List[np.ndarray],
@@ -121,17 +236,32 @@ def refresh_followed_path_plots(path_plots, waypoint_paths: List[np.ndarray],
 def covered_to_rgba(covered: np.ndarray) -> np.ndarray:
     rgba = np.zeros((covered.shape[0], covered.shape[1], 4), dtype=float)
     covered_cells = covered > 0
-    rgba[covered_cells, 0] = 0.18
-    rgba[covered_cells, 1] = 0.18
-    rgba[covered_cells, 2] = 0.18
-    rgba[covered_cells, 3] = 0.58
+    rgba[covered_cells, 0] = 0.00
+    rgba[covered_cells, 1] = 0.00
+    rgba[covered_cells, 2] = 1.00
+    rgba[covered_cells, 3] = 0.88
     return rgba
+
+
+def enlarge_target_markers(target_plot, marker_size: float = 250.0) -> None:
+    if target_plot is None:
+        return
+    if hasattr(target_plot, "set_sizes"):
+        target_plot.set_sizes(np.full_like(target_plot.get_sizes(), marker_size, dtype=float))
+    elif isinstance(target_plot, dict):
+        for artist in target_plot.values():
+            enlarge_target_markers(artist, marker_size)
+    elif isinstance(target_plot, (list, tuple)):
+        for artist in target_plot:
+            enlarge_target_markers(artist, marker_size)
 
 
 def add_coverage_overlay(r, covered: np.ndarray, show_figure: bool):
     if not show_figure:
         return None, None
-    ax = r._axes_handle
+    ax = get_robotarium_axes(r)
+    if ax is None:
+        return None, None
     coverage_plot = ax.imshow(
         covered_to_rgba(covered),
         origin="lower",
@@ -163,22 +293,72 @@ def refresh_coverage_overlay(coverage_plot, coverage_label, covered: np.ndarray)
         coverage_label.set_text(f"Covered cells: {int(np.count_nonzero(covered))}")
 
 
+def add_safety_area_plots(r, show_figure: bool, show_safe_area: bool):
+    if not show_figure or not show_safe_area:
+        return None
+    ax = get_robotarium_axes(r)
+    if ax is None:
+        return None
+    safety_plots = []
+    for _ in range(N_ROBOTS):
+        circle = Circle(
+            (0.0, 0.0),
+            ROBOTARIUM_SAFETY_RADIUS,
+            fill=False,
+            edgecolor="tab:cyan",
+            linewidth=1.2,
+            linestyle="--",
+            alpha=0.45,
+            zorder=18,
+        )
+        ax.add_patch(circle)
+        safety_plots.append(circle)
+    return safety_plots
+
+
+def refresh_safety_area_plots(safety_plots, x_si: np.ndarray,
+                              failed_robot_ids: Set[int]) -> None:
+    if safety_plots is None:
+        return
+    for robot_id, circle in enumerate(safety_plots):
+        circle.center = (float(x_si[0, robot_id]), float(x_si[1, robot_id]))
+        circle.set_radius(ROBOTARIUM_SAFETY_RADIUS)
+        if robot_id in failed_robot_ids:
+            circle.set_edgecolor("red")
+            circle.set_linestyle("-")
+            circle.set_linewidth(2.2)
+            circle.set_alpha(0.95)
+            circle.set_zorder(24)
+        else:
+            circle.set_edgecolor("tab:cyan")
+            circle.set_linestyle("--")
+            circle.set_linewidth(1.2)
+            circle.set_alpha(0.45)
+            circle.set_zorder(18)
+
+
 def create_centralized_motion_helpers():
     si_barrier_cert = create_si_barrier_certificate_with_boundary(
-        safety_radius=0.13,
+        safety_radius=ROBOTARIUM_CONTROL_SAFETY_RADIUS,
         barrier_gain=60.0,
-        magnitude_limit=0.16,
+        magnitude_limit=0.10,
+        boundary_points=ACTIVE_WORLD_BOUNDS,
+    )
+    static_barrier_cert = create_si_barrier_certificate_with_boundary(
+        safety_radius=ROBOTARIUM_CONTROL_SAFETY_RADIUS,
+        barrier_gain=100.0,
+        magnitude_limit=0.10,
         boundary_points=ACTIVE_WORLD_BOUNDS,
     )
     si_position_controller = create_si_position_controller(
         x_velocity_gain=0.8,
         y_velocity_gain=0.8,
-        velocity_magnitude_limit=0.14,
+        velocity_magnitude_limit=0.10,
     )
     si_to_uni_dyn, uni_to_si_states = create_si_to_uni_mapping(
         projection_distance=SI_PROJECTION_DISTANCE,
     )
-    return si_barrier_cert, si_position_controller, si_to_uni_dyn, uni_to_si_states
+    return si_barrier_cert, static_barrier_cert, si_position_controller, si_to_uni_dyn, uni_to_si_states
 
 
 def make_initial_conditions_from_grid(grid_positions: List[Tuple[int, int]],
@@ -198,27 +378,45 @@ def create_centralized_robotarium(show_figure: bool, show_grid: bool,
         show_figure=show_figure,
         sim_in_real_time=False,
         initial_conditions=make_initial_conditions_from_grid(initial_grid_positions),
-        skip_initialization=True,
     )
+    normalize_robotarium_plot_handles(r)
     if show_figure:
-        ax = r._axes_handle
-        ax.set_xlim(WORLD_BOUNDS[0], WORLD_BOUNDS[1])
-        ax.set_ylim(WORLD_BOUNDS[2], WORLD_BOUNDS[3])
-        ax.set_aspect("equal")
-        if show_grid:
-            x_lines = np.linspace(ACTIVE_WORLD_BOUNDS[0], ACTIVE_WORLD_BOUNDS[1], W + 1)
-            y_lines = np.linspace(ACTIVE_WORLD_BOUNDS[2], ACTIVE_WORLD_BOUNDS[3], H + 1)
-            ax.vlines(x_lines, ACTIVE_WORLD_BOUNDS[2], ACTIVE_WORLD_BOUNDS[3],
-                      color="k", alpha=0.18, linewidth=0.35, zorder=-3)
-            ax.hlines(y_lines, ACTIVE_WORLD_BOUNDS[0], ACTIVE_WORLD_BOUNDS[1],
-                      color="k", alpha=0.18, linewidth=0.35, zorder=-3)
+        ax = get_robotarium_axes(r)
+        fig = get_robotarium_figure(r)
+        if ax is not None:
+            ax.set_facecolor("white")
+            ax.set_xlim(WORLD_BOUNDS[0], WORLD_BOUNDS[1])
+            ax.set_ylim(WORLD_BOUNDS[2], WORLD_BOUNDS[3])
+            ax.set_aspect("equal")
+            if show_grid:
+                x_lines = np.linspace(ACTIVE_WORLD_BOUNDS[0], ACTIVE_WORLD_BOUNDS[1], W + 1)
+                y_lines = np.linspace(ACTIVE_WORLD_BOUNDS[2], ACTIVE_WORLD_BOUNDS[3], H + 1)
+                ax.vlines(x_lines, ACTIVE_WORLD_BOUNDS[2], ACTIVE_WORLD_BOUNDS[3],
+                          color="k", alpha=0.18, linewidth=0.35, zorder=-3)
+                ax.hlines(y_lines, ACTIVE_WORLD_BOUNDS[0], ACTIVE_WORLD_BOUNDS[1],
+                          color="k", alpha=0.18, linewidth=0.35, zorder=-3)
+            ax.add_patch(Rectangle(
+                (ACTIVE_WORLD_BOUNDS[0], ACTIVE_WORLD_BOUNDS[2]),
+                ACTIVE_WORLD_BOUNDS[1] - ACTIVE_WORLD_BOUNDS[0],
+                ACTIVE_WORLD_BOUNDS[3] - ACTIVE_WORLD_BOUNDS[2],
+                fill=False,
+                edgecolor="black",
+                linewidth=2.0,
+                zorder=20,
+            ))
+        if fig is not None:
+            fig.patch.set_facecolor("white")
     return r
 
 
 def advance_waypoints(x_si: np.ndarray, waypoint_paths: List[np.ndarray],
-                      waypoint_indices: List[int]) -> None:
+                      waypoint_indices: List[int],
+                      failed_robot_ids: Set[int] = None) -> None:
+    failed_robot_ids = failed_robot_ids or set()
     tolerance = WAYPOINT_ARRIVAL_CELLS * min(CELL_WIDTH, CELL_HEIGHT)
     for i, waypoint_path in enumerate(waypoint_paths):
+        if i in failed_robot_ids:
+            continue
         while waypoint_indices[i] < len(waypoint_path) - 1:
             current_goal = waypoint_path[waypoint_indices[i]]
             if np.linalg.norm(x_si[:, i] - current_goal) > tolerance:
@@ -232,6 +430,15 @@ def make_waypoint_goals(waypoint_paths: List[np.ndarray],
     for i, (waypoint_path, waypoint_idx) in enumerate(zip(waypoint_paths, waypoint_indices)):
         goals[:, i] = waypoint_path[waypoint_idx]
     return goals
+
+
+def active_robots_completed_waypoints(waypoint_paths: List[np.ndarray],
+                                      waypoint_indices: List[int],
+                                      failed_robot_ids: Set[int]) -> bool:
+    return all(
+        waypoint_indices[i] >= len(waypoint_paths[i]) - 1
+        for i in active_robot_indices(failed_robot_ids)
+    )
 
 
 def apply_deadlock_yield(goals: np.ndarray, x_si: np.ndarray, step: int) -> np.ndarray:
@@ -297,7 +504,8 @@ def build_robots(rng: np.random.Generator) -> Tuple[List[Robot], np.ndarray]:
 
 def run(show_figure: bool = True, max_steps: int = MAX_STEPS,
         grid_step_size: int = GRID_MOVE_CELLS,
-        show_grid: bool = True) -> Dict[str, object]:
+        show_grid: bool = True,
+        show_safe_area: bool = False) -> Dict[str, object]:
     planner_rng = np.random.default_rng(START_RANDOM_SEED)
     start_wall_time = wall_time()
     robots, zones = build_robots(planner_rng)
@@ -306,10 +514,10 @@ def run(show_figure: bool = True, max_steps: int = MAX_STEPS,
     helpers = create_centralized_motion_helpers()
     x_pose = r.get_poses()
     initial_pose = x_pose.copy()
-    _, _, _, uni_to_si_states = helpers
+    _, _, _, _, uni_to_si_states = helpers
     waypoint_paths = [make_unicycle_waypoint_path(robot.path) for robot in robots]
     waypoint_indices = [0 for _ in waypoint_paths]
-    add_partition_background(r, zones, show_figure)
+    stuck_counts = np.zeros(N_ROBOTS, dtype=int)
     path_plots = add_planned_path_plots(r, waypoint_paths, show_figure)
     refresh_followed_path_plots(path_plots, waypoint_paths, waypoint_indices)
     targets = canonical_targets()
@@ -319,30 +527,66 @@ def run(show_figure: bool = True, max_steps: int = MAX_STEPS,
     # print(failure_schedule)
     print_failure_configuration("Centralized", failure_schedule)
     failed_robot_ids: Set[int] = set()
+    pending_failures = deque()
+    takeover_log: Dict[int, int] = {}
     found_targets: Set[Tuple[int, int]] = set()
     covered = np.zeros((H, W), dtype=int)
     local_maps = [np.zeros((H, W), dtype=bool) for _ in range(N_ROBOTS)]
     coverage_plot, coverage_label = add_coverage_overlay(r, covered, show_figure)
     found_plot = add_target_plot(r, targets, found_targets, "Centralized Robotarium", 0, show_figure)
+    enlarge_target_markers(found_plot)
+    safety_plots = add_safety_area_plots(r, show_figure, show_safe_area)
+    refresh_safety_area_plots(safety_plots, uni_to_si_states(x_pose), failed_robot_ids)
 
     step = 0
-    while step < max_steps and len(found_targets) < len(targets):
+    while (
+        len(found_targets) < len(targets)
+        and not should_stop_simulation(step, max_steps, start_wall_time)
+        and not active_robots_completed_waypoints(waypoint_paths, waypoint_indices, failed_robot_ids)
+    ):
+        previously_failed = set(failed_robot_ids)
         update_failed_robots(step, failure_schedule, failed_robot_ids, "Centralized")
+        for failed_id in sorted(failed_robot_ids - previously_failed):
+            robots[failed_id].failed = True
+            pending_failures.append(failed_id)
+            stuck_counts[failed_id] = 0
         active_indices = active_robot_indices(failed_robot_ids)
         x_si = uni_to_si_states(x_pose)
+        refresh_safety_area_plots(safety_plots, x_si, failed_robot_ids)
         physical_positions = [world_to_grid(x_si[0, i], x_si[1, i]) for i in range(N_ROBOTS)]
         active_positions = [physical_positions[i] for i in active_indices]
         active_maps = [local_maps[i] for i in active_indices]
         sense_targets(active_positions, active_maps, covered, targets, found_targets)
         refresh_coverage_overlay(coverage_plot, coverage_label, covered)
-        advance_waypoints(x_si, waypoint_paths, waypoint_indices)
+        advance_waypoints(x_si, waypoint_paths, waypoint_indices, failed_robot_ids)
+        assign_pending_failures_to_finishers(
+            pending_failures,
+            x_si,
+            waypoint_paths,
+            waypoint_indices,
+            failed_robot_ids,
+            takeover_log,
+        )
         goals = make_waypoint_goals(waypoint_paths, waypoint_indices)
         goals = apply_deadlock_yield(goals, x_si, step)
         goals = hold_failed_robot_goals(goals, x_si, failed_robot_ids)
+        prev_x_si = x_si.copy()
         x_pose = update_robotarium(r, x_pose, goals, helpers, failed_robot_ids=failed_robot_ids)
+        moved_x_si = uni_to_si_states(x_pose)
+        refresh_safety_area_plots(safety_plots, moved_x_si, failed_robot_ids)
         step += 1
+        movement = np.linalg.norm(moved_x_si - prev_x_si, axis=0)
+        for i in active_indices:
+            if movement[i] < STUCK_MOVEMENT_EPS:
+                stuck_counts[i] += 1
+            else:
+                stuck_counts[i] = 0
+            if stuck_counts[i] >= STUCK_STEPS and waypoint_indices[i] < len(waypoint_paths[i]) - 1:
+                waypoint_indices[i] += 1
+                stuck_counts[i] = 0
         refresh_followed_path_plots(path_plots, waypoint_paths, waypoint_indices)
         refresh_found_plot(r, found_plot, found_targets, "Centralized Robotarium", step, len(targets))
+        enlarge_target_markers(found_plot)
 
     if len(found_targets) >= len(targets):
         add_completion_banner(
@@ -366,6 +610,8 @@ def run(show_figure: bool = True, max_steps: int = MAX_STEPS,
         "max_displacement": float(displacement.max()),
         "failure_schedule": failure_schedule,
         "failed_robot_ids": sorted(failed_robot_ids),
+        "takeovers": takeover_log,
+        "pending_failures": list(pending_failures),
     }
 
 
@@ -375,10 +621,18 @@ if __name__ == "__main__":
     parser.add_argument("--max-steps", type=int, default=MAX_STEPS)
     parser.add_argument("--grid-step-size", type=int, default=GRID_MOVE_CELLS)
     parser.add_argument("--show-grid", type=lambda value: value.lower() == "true", default=True)
+    parser.add_argument(
+        "--show-safe-area",
+        nargs="?",
+        const=True,
+        default=False,
+        type=lambda value: value if isinstance(value, bool) else value.lower() == "true",
+    )
     args = parser.parse_args()
     run(
         show_figure=not args.no_show,
         max_steps=args.max_steps,
         grid_step_size=args.grid_step_size,
         show_grid=args.show_grid,
+        show_safe_area=args.show_safe_area,
     )

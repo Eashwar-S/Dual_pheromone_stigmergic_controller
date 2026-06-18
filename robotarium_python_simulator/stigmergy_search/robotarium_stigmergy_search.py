@@ -11,11 +11,42 @@ from robot_efficient import Robot
 
 def apply_side_buffer(goal: Tuple[int, int]) -> Tuple[int, int]:
     gx, gy = goal
-    margin = 0
+    margin = ROBOT_RADIUS
     return (
         int(np.clip(gx, margin, W - 1 - margin)),
         int(np.clip(gy, margin, H - 1 - margin)),
     )
+
+
+def covered_to_rgba(covered: np.ndarray) -> np.ndarray:
+    rgba = np.zeros((covered.shape[0], covered.shape[1], 4), dtype=float)
+    covered_cells = covered > 0
+    rgba[covered_cells, 0] = 0.00
+    rgba[covered_cells, 1] = 0.00
+    rgba[covered_cells, 2] = 1.00
+    rgba[covered_cells, 3] = 0.88
+    return rgba
+
+
+def add_coverage_overlay(r, covered: np.ndarray, show_figure: bool):
+    if not show_figure:
+        return None
+    ax = get_robotarium_axes(r)
+    if ax is None:
+        return None
+    coverage_plot = ax.imshow(
+        covered_to_rgba(covered),
+        origin="lower",
+        extent=ACTIVE_WORLD_BOUNDS,
+        zorder=-5,
+        interpolation="nearest",
+    )
+    return coverage_plot
+
+
+def refresh_coverage_overlay(coverage_plot, covered: np.ndarray) -> None:
+    if coverage_plot is not None:
+        coverage_plot.set_data(covered_to_rgba(covered))
 
 
 def run(show_figure: bool = True, max_steps: int = MAX_STEPS,
@@ -59,22 +90,29 @@ def run(show_figure: bool = True, max_steps: int = MAX_STEPS,
     pher = np.zeros((H, W), dtype=float)
     grid_goals = [apply_side_buffer((robot.x, robot.y)) for robot in robots]
     waypoint_timers = np.zeros(N_ROBOTS, dtype=int)
+    stuck_counts = np.zeros(N_ROBOTS, dtype=int)
+    coverage_plot = add_coverage_overlay(r, covered, show_figure)
     pheromone_plot = add_pheromone_overlay(r, pher, show_figure)
     found_plot = add_target_plot(r, targets, found_targets, "Search Stigmergy Robotarium", 0, show_figure)
 
     step = 0
-    while step < max_steps and len(found_targets) < len(targets):
+    while len(found_targets) < len(targets) and not should_stop_simulation(step, max_steps, start_wall_time):
         update_failed_robots(step, failure_schedule, failed_robot_ids, "Search")
         active_indices = active_robot_indices(failed_robot_ids)
         x_si = uni_to_si_states(x_pose)
         positions = [world_to_grid(x_si[0, i], x_si[1, i]) for i in range(N_ROBOTS)]
-        for i in active_indices:
-            robot = robots[i]
-            robot.x, robot.y = positions[i]
+        # for i in active_indices:
+        #     robot = robots[i]
+        #     robot.x, robot.y = positions[i]
+
+        for i in range(N_ROBOTS):
+            robots[i].x, robots[i].y = positions[i]
+            robots[i].failed = i in failed_robot_ids
 
         active_positions = [positions[i] for i in active_indices]
         active_maps = [robots[i].local_covered for i in active_indices]
         sense_targets(active_positions, active_maps, covered, targets, found_targets)
+        refresh_coverage_overlay(coverage_plot, covered)
         apply_decay(pher, TAU_DECAY, PHER_MIN)
         for gx, gy in active_positions:
             deposit_uniform(pher, gx, gy, PHER_DEPOSIT, robot_radius=ROBOT_RADIUS)
@@ -103,6 +141,15 @@ def run(show_figure: bool = True, max_steps: int = MAX_STEPS,
         x_pose = update_robotarium(r, x_pose, goals, helpers, failed_robot_ids=failed_robot_ids)
         moved_x_si = uni_to_si_states(x_pose)
         step += 1
+        movement = np.linalg.norm(moved_x_si - prev_x_si, axis=0)
+        for i in active_indices:
+            if movement[i] < STUCK_MOVEMENT_EPS:
+                stuck_counts[i] += 1
+            else:
+                stuck_counts[i] = 0
+            if stuck_counts[i] >= STUCK_STEPS:
+                waypoint_timers[i] = 0
+                stuck_counts[i] = 0
         print_movement_report("Search", step, prev_x_si, moved_x_si, log_interval)
         refresh_found_plot(r, found_plot, found_targets, "Search Stigmergy Robotarium", step, len(targets))
 

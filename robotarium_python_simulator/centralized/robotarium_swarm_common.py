@@ -27,7 +27,7 @@ RANDOM_SEED = 7
 TARGET_RANDOM_SEED = RANDOM_SEED
 START_RANDOM_SEED = RANDOM_SEED
 ALGORITHM_RANDOM_SEED = RANDOM_SEED + 100
-FAILURE_RANDOM_SEED = RANDOM_SEED + 200
+FAILURE_RANDOM_SEED = RANDOM_SEED + 400
 SHARED_INITIAL_GRID_POSITIONS = [(1, 22), (17, 24), (34, 25), (1, 1), (25, 1)]
 
 # E2: set this to True to enable robot failures. Leave False for E1/no failures.
@@ -39,11 +39,17 @@ COLLISION_RADIUS = 0
 PHER_DEPOSIT = 1.0
 TAU_DECAY = (GRID_SIZE ** 2) / (N_ROBOTS * max(1, ROBOT_RADIUS))
 PHER_MIN = 1e-6
-MAX_STEPS = 120000
+MAX_STEPS = 12000
+MAX_WALL_SECONDS = 590.0
 ARRIVAL_TOLERANCE = 0.65
 GRID_MOVE_CELLS = 7
 WAYPOINT_UPDATE_STEPS = 1
 SI_PROJECTION_DISTANCE = 0.05
+ROBOTARIUM_SAFETY_RADIUS = 0.15
+ROBOTARIUM_CONTROL_SAFETY_RADIUS = ROBOTARIUM_SAFETY_RADIUS + 2 * SI_PROJECTION_DISTANCE
+GOAL_SEPARATION_RADIUS = ROBOTARIUM_SAFETY_RADIUS
+STUCK_MOVEMENT_EPS = 0.002
+STUCK_STEPS = 80
 
 W = H = GRID_SIZE
 CELL_WIDTH = (ACTIVE_WORLD_BOUNDS[1] - ACTIVE_WORLD_BOUNDS[0]) / W
@@ -109,6 +115,11 @@ def hold_failed_robot_goals(goals: np.ndarray, x_si: np.ndarray,
     for robot_id in failed_robot_ids:
         adjusted[:, robot_id] = x_si[:, robot_id]
     return adjusted
+
+
+def should_stop_simulation(step: int, max_steps: int, start_wall_time: float,
+                           max_wall_seconds: float = MAX_WALL_SECONDS) -> bool:
+    return step >= max_steps or (wall_time() - start_wall_time) >= max_wall_seconds
 
 
 def print_seed_configuration(label: str, targets: Optional[Set[Tuple[int, int]]] = None,
@@ -198,7 +209,6 @@ def create_robotarium(show_figure: bool, show_grid: bool = True,
         show_figure=show_figure,
         sim_in_real_time=False,
         initial_conditions=make_initial_conditions(seed, initial_grid_positions),
-        skip_initialization=True,
     )
     if show_figure:
         ax = r._axes_handle
@@ -217,9 +227,9 @@ def create_robotarium(show_figure: bool, show_grid: bool = True,
 
 def create_motion_helpers():
     barrier_kwargs = {
-        "safety_radius": 0.12,
+        "safety_radius": ROBOTARIUM_CONTROL_SAFETY_RADIUS,
         "barrier_gain": 100.0,
-        "magnitude_limit": 0.14,
+        "magnitude_limit": 0.10,
     }
     barrier_sig = inspect.signature(create_si_barrier_certificate)
     barrier_kwargs = {
@@ -228,11 +238,51 @@ def create_motion_helpers():
         if key in barrier_sig.parameters
     }
     si_barrier_cert = create_si_barrier_certificate(**barrier_kwargs)
-    si_position_controller = create_si_position_controller(velocity_magnitude_limit=0.14)
+    static_barrier_cert = create_si_barrier_certificate_with_boundary(
+        safety_radius=ROBOTARIUM_CONTROL_SAFETY_RADIUS,
+        barrier_gain=100.0,
+        magnitude_limit=0.10,
+        boundary_points=ACTIVE_WORLD_BOUNDS,
+    )
+    si_position_controller = create_si_position_controller(velocity_magnitude_limit=0.10)
     si_to_uni_dyn, uni_to_si_states = create_si_to_uni_mapping(
         projection_distance=SI_PROJECTION_DISTANCE,
     )
-    return si_barrier_cert, si_position_controller, si_to_uni_dyn, uni_to_si_states
+    return si_barrier_cert, static_barrier_cert, si_position_controller, si_to_uni_dyn, uni_to_si_states
+
+
+def separate_goals(goals: np.ndarray, x_si: np.ndarray,
+                   failed_robot_ids: Optional[Set[int]] = None,
+                   min_distance: float = GOAL_SEPARATION_RADIUS) -> np.ndarray:
+    adjusted = goals.copy()
+    failed_robot_ids = failed_robot_ids or set()
+    center = np.array([
+        0.5 * (ACTIVE_WORLD_BOUNDS[0] + ACTIVE_WORLD_BOUNDS[1]),
+        0.5 * (ACTIVE_WORLD_BOUNDS[2] + ACTIVE_WORLD_BOUNDS[3]),
+    ])
+    for _ in range(3):
+        for i in range(N_ROBOTS):
+            if i in failed_robot_ids:
+                adjusted[:, i] = x_si[:, i]
+                continue
+            correction = np.zeros(2)
+            for j in range(N_ROBOTS):
+                if i == j:
+                    continue
+                obstacle = x_si[:, j] if j in failed_robot_ids else adjusted[:, j]
+                delta = adjusted[:, i] - obstacle
+                distance = float(np.linalg.norm(delta))
+                if distance < 1e-9:
+                    delta = adjusted[:, i] - center
+                    if float(np.linalg.norm(delta)) < 1e-9:
+                        delta = np.array([1.0, 0.0])
+                    distance = float(np.linalg.norm(delta))
+                if distance < min_distance:
+                    correction += (delta / distance) * (min_distance - distance)
+            adjusted[:, i] += 0.6 * correction
+            adjusted[0, i] = np.clip(adjusted[0, i], ACTIVE_WORLD_BOUNDS[0], ACTIVE_WORLD_BOUNDS[1])
+            adjusted[1, i] = np.clip(adjusted[1, i], ACTIVE_WORLD_BOUNDS[2], ACTIVE_WORLD_BOUNDS[3])
+    return adjusted
 
 
 def make_goal_world(robot_grid_positions) -> np.ndarray:
@@ -266,14 +316,29 @@ def sense_targets(robot_positions, local_maps, covered_global, targets: Set[Tupl
 
 
 def update_robotarium(r, x_pose, x_goal_world, helpers, failed_robot_ids: Optional[Set[int]] = None):
-    si_barrier_cert, si_position_controller, si_to_uni_dyn, uni_to_si_states = helpers
+    si_barrier_cert, static_barrier_cert, si_position_controller, si_to_uni_dyn, uni_to_si_states = helpers
     x_si = uni_to_si_states(x_pose)
+    x_goal_world = separate_goals(x_goal_world, x_si, failed_robot_ids)
     dxi = si_position_controller(x_si, x_goal_world)
-    dxi = si_barrier_cert(dxi, x_si)
-    dxu = si_to_uni_dyn(dxi, x_pose)
+
+    failed_robot_ids = failed_robot_ids or set()
     if failed_robot_ids:
-        for robot_id in failed_robot_ids:
-            dxu[:, robot_id] = 0.0
+        active_ids = [i for i in range(N_ROBOTS) if i not in failed_robot_ids]
+        failed_ids = sorted(failed_robot_ids)
+        active_x = x_si[:, active_ids]
+        failed_x = x_si[:, failed_ids]
+        active_dxi = dxi[:, active_ids]
+        combined_x = np.hstack((active_x, failed_x))
+        combined_dxi = np.hstack((active_dxi, np.zeros((2, len(failed_ids)))))
+        safe_combined_dxi = static_barrier_cert(combined_dxi, combined_x)
+        dxi[:, :] = 0.0
+        dxi[:, active_ids] = safe_combined_dxi[:, :len(active_ids)]
+    else:
+        dxi = si_barrier_cert(dxi, x_si)
+
+    dxu = si_to_uni_dyn(dxi, x_pose)
+    for robot_id in failed_robot_ids:
+        dxu[:, robot_id] = 0.0
     dxu[0, :] = np.clip(dxu[0, :], -r.MAX_LINEAR_VELOCITY, r.MAX_LINEAR_VELOCITY)
     dxu[1, :] = np.clip(dxu[1, :], -r.MAX_ANGULAR_VELOCITY, r.MAX_ANGULAR_VELOCITY)
     r.set_velocities(np.arange(N_ROBOTS), dxu)
@@ -298,9 +363,10 @@ def add_target_plot(r, targets, found_targets, title: str, step: int, show_figur
     ax = r._axes_handle
     coords = np.array([grid_to_world(gx, gy) for gx, gy in targets]).T
     if coords.size:
-        ax.scatter(coords[0], coords[1], s=90, marker="x", c="r", zorder=10)
-    found_plot = ax.scatter([], [], s=90, marker="o", facecolors="none",
-                            edgecolors="g", linewidths=1.5, zorder=11)
+        ax.scatter(coords[0], coords[1], s=280, marker="x", c="r",
+                   linewidths=2.5, zorder=10)
+    found_plot = ax.scatter([], [], s=220, marker="o", facecolors="none",
+                            edgecolors="g", linewidths=2.2, zorder=11)
     ax.set_title(f"{title} | Step: {step} | Targets: {len(found_targets)}/{len(targets)}")
     return found_plot
 
