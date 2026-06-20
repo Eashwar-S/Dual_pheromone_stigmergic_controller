@@ -4,6 +4,8 @@ import inspect
 import sys
 import time
 
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 import numpy as np
 
 SIM_ROOT = Path(__file__).resolve().parent
@@ -35,29 +37,63 @@ N_TARGETS = 10
 RANDOM_SEED = 7
 TARGET_RANDOM_SEED = RANDOM_SEED
 START_RANDOM_SEED = RANDOM_SEED
-ALGORITHM_RANDOM_SEED = RANDOM_SEED + 100
-FAILURE_RANDOM_SEED = RANDOM_SEED + 200
+ALGORITHM_RANDOM_SEED = RANDOM_SEED + 102
+FAILURE_RANDOM_SEED = RANDOM_SEED + 400
 SHARED_INITIAL_GRID_POSITIONS = [(1, 22), (17, 24), (34, 25), (1, 1), (25, 1)]
 
 # E2: set this to True to enable robot failures. Leave False for E1/no failures.
-E2_FAILURES_ENABLED = False
+E2_FAILURES_ENABLED = True
 E2_N_FAILURES = 2
 
 ROBOT_RADIUS = 2
-COLLISION_RADIUS = 0
+COLLISION_RADIUS = 4
 PHER_DEPOSIT = 1.0
-TAU_DECAY = (GRID_SIZE ** 2) / (N_ROBOTS * max(1, ROBOT_RADIUS))#600.0
-print(f'Tau decay - {TAU_DECAY}')
+TAU_DECAY = 2 * (GRID_SIZE ** 2) / (N_ROBOTS * max(1, ROBOT_RADIUS))
 PHER_MIN = 1e-6
-MAX_STEPS = 1200
+MAX_STEPS = 120000
+MAX_WALL_SECONDS = 590.0
 ARRIVAL_TOLERANCE = 0.65
 GRID_MOVE_CELLS = 7
 WAYPOINT_UPDATE_STEPS = 5
 SI_PROJECTION_DISTANCE = 0.05
+ROBOTARIUM_SAFETY_RADIUS = 0.20
+GOAL_SEPARATION_RADIUS = 0.22
+STUCK_MOVEMENT_EPS = 0.002
+STUCK_STEPS = 80
 
 W = H = GRID_SIZE
 CELL_WIDTH = (ACTIVE_WORLD_BOUNDS[1] - ACTIVE_WORLD_BOUNDS[0]) / W
 CELL_HEIGHT = (ACTIVE_WORLD_BOUNDS[3] - ACTIVE_WORLD_BOUNDS[2]) / H
+
+
+def get_robotarium_axes(r):
+    return (
+        getattr(r, "_axes_handle", None)
+        or getattr(r, "axes_handle", None)
+        or getattr(r, "axes", None)
+        or getattr(r, "ax", None)
+        or (plt.gca() if plt.get_fignums() else None)
+    )
+
+
+def get_robotarium_figure(r):
+    return (
+        getattr(r, "_figure_handle", None)
+        or getattr(r, "figure_handle", None)
+        or getattr(r, "figure", None)
+        or getattr(r, "fig", None)
+        or getattr(r, "_fig", None)
+        or (plt.gcf() if plt.get_fignums() else None)
+    )
+
+
+def normalize_robotarium_plot_handles(r) -> None:
+    ax = get_robotarium_axes(r)
+    fig = get_robotarium_figure(r)
+    if ax is not None and not hasattr(r, "_axes_handle"):
+        r._axes_handle = ax
+    if fig is not None and not hasattr(r, "_figure_handle"):
+        r._figure_handle = fig
 
 def generate_unique_targets(grid_size: int, m: int, rng: np.random.Generator) -> Set[Tuple[int, int]]:
     """Generate m unique random target positions on a grid."""
@@ -119,6 +155,11 @@ def hold_failed_robot_goals(goals: np.ndarray, x_si: np.ndarray,
     for robot_id in failed_robot_ids:
         adjusted[:, robot_id] = x_si[:, robot_id]
     return adjusted
+
+
+def should_stop_simulation(step: int, max_steps: int, start_wall_time: float,
+                           max_wall_seconds: float = MAX_WALL_SECONDS) -> bool:
+    return step >= max_steps or (wall_time() - start_wall_time) >= max_wall_seconds
 
 
 def print_seed_configuration(label: str, targets: Optional[Set[Tuple[int, int]]] = None,
@@ -208,28 +249,38 @@ def create_robotarium(show_figure: bool, show_grid: bool = True,
         show_figure=show_figure,
         sim_in_real_time=False,
         initial_conditions=make_initial_conditions(seed, initial_grid_positions),
-        skip_initialization=True,
     )
+    normalize_robotarium_plot_handles(r)
     if show_figure:
-        ax = r._axes_handle
-        ax.set_xlim(WORLD_BOUNDS[0], WORLD_BOUNDS[1])
-        ax.set_ylim(WORLD_BOUNDS[2], WORLD_BOUNDS[3])
-        ax.set_aspect("equal")
-        if show_grid:
-            x_lines = np.linspace(ACTIVE_WORLD_BOUNDS[0], ACTIVE_WORLD_BOUNDS[1], W + 1)
-            y_lines = np.linspace(ACTIVE_WORLD_BOUNDS[2], ACTIVE_WORLD_BOUNDS[3], H + 1)
-            ax.vlines(x_lines, ACTIVE_WORLD_BOUNDS[2], ACTIVE_WORLD_BOUNDS[3],
-                      color="k", alpha=0.18, linewidth=0.35, zorder=-3)
-            ax.hlines(y_lines, ACTIVE_WORLD_BOUNDS[0], ACTIVE_WORLD_BOUNDS[1],
-                      color="k", alpha=0.18, linewidth=0.35, zorder=-3)
+        ax = get_robotarium_axes(r)
+        if ax is not None:
+            ax.set_xlim(WORLD_BOUNDS[0], WORLD_BOUNDS[1])
+            ax.set_ylim(WORLD_BOUNDS[2], WORLD_BOUNDS[3])
+            ax.set_aspect("equal")
+            if show_grid:
+                x_lines = np.linspace(ACTIVE_WORLD_BOUNDS[0], ACTIVE_WORLD_BOUNDS[1], W + 1)
+                y_lines = np.linspace(ACTIVE_WORLD_BOUNDS[2], ACTIVE_WORLD_BOUNDS[3], H + 1)
+                ax.vlines(x_lines, ACTIVE_WORLD_BOUNDS[2], ACTIVE_WORLD_BOUNDS[3],
+                          color="k", alpha=0.18, linewidth=0.35, zorder=-3)
+                ax.hlines(y_lines, ACTIVE_WORLD_BOUNDS[0], ACTIVE_WORLD_BOUNDS[1],
+                          color="k", alpha=0.18, linewidth=0.35, zorder=-3)
+            ax.add_patch(Rectangle(
+                (ACTIVE_WORLD_BOUNDS[0], ACTIVE_WORLD_BOUNDS[2]),
+                ACTIVE_WORLD_BOUNDS[1] - ACTIVE_WORLD_BOUNDS[0],
+                ACTIVE_WORLD_BOUNDS[3] - ACTIVE_WORLD_BOUNDS[2],
+                fill=False,
+                edgecolor="black",
+                linewidth=2.0,
+                zorder=20,
+            ))
     return r
 
 
 def create_motion_helpers():
     barrier_kwargs = {
-        "safety_radius": 0.12,
+        "safety_radius": ROBOTARIUM_SAFETY_RADIUS,
         "barrier_gain": 100.0,
-        "magnitude_limit": 0.14,
+        "magnitude_limit": 0.10,
     }
     barrier_sig = inspect.signature(create_si_barrier_certificate)
     barrier_kwargs = {
@@ -238,11 +289,45 @@ def create_motion_helpers():
         if key in barrier_sig.parameters
     }
     si_barrier_cert = create_si_barrier_certificate(**barrier_kwargs)
-    si_position_controller = create_si_position_controller(velocity_magnitude_limit=0.14)
+    si_position_controller = create_si_position_controller(velocity_magnitude_limit=0.10)
     si_to_uni_dyn, uni_to_si_states = create_si_to_uni_mapping(
         projection_distance=SI_PROJECTION_DISTANCE,
     )
     return si_barrier_cert, si_position_controller, si_to_uni_dyn, uni_to_si_states
+
+
+def separate_goals(goals: np.ndarray, x_si: np.ndarray,
+                   failed_robot_ids: Optional[Set[int]] = None,
+                   min_distance: float = GOAL_SEPARATION_RADIUS) -> np.ndarray:
+    adjusted = goals.copy()
+    failed_robot_ids = failed_robot_ids or set()
+    center = np.array([
+        0.5 * (ACTIVE_WORLD_BOUNDS[0] + ACTIVE_WORLD_BOUNDS[1]),
+        0.5 * (ACTIVE_WORLD_BOUNDS[2] + ACTIVE_WORLD_BOUNDS[3]),
+    ])
+    for _ in range(3):
+        for i in range(N_ROBOTS):
+            if i in failed_robot_ids:
+                adjusted[:, i] = x_si[:, i]
+                continue
+            correction = np.zeros(2)
+            for j in range(N_ROBOTS):
+                if i == j:
+                    continue
+                obstacle = x_si[:, j] if j in failed_robot_ids else adjusted[:, j]
+                delta = adjusted[:, i] - obstacle
+                distance = float(np.linalg.norm(delta))
+                if distance < 1e-9:
+                    delta = adjusted[:, i] - center
+                    if float(np.linalg.norm(delta)) < 1e-9:
+                        delta = np.array([1.0, 0.0])
+                    distance = float(np.linalg.norm(delta))
+                if distance < min_distance:
+                    correction += (delta / distance) * (min_distance - distance)
+            adjusted[:, i] += 0.6 * correction
+            adjusted[0, i] = np.clip(adjusted[0, i], ACTIVE_WORLD_BOUNDS[0], ACTIVE_WORLD_BOUNDS[1])
+            adjusted[1, i] = np.clip(adjusted[1, i], ACTIVE_WORLD_BOUNDS[2], ACTIVE_WORLD_BOUNDS[3])
+    return adjusted
 
 
 def make_goal_world(robot_grid_positions) -> np.ndarray:
@@ -278,13 +363,18 @@ def sense_targets(robot_positions, local_maps, covered_global, targets: Set[Tupl
 def update_robotarium(r, x_pose, x_goal_world, helpers, failed_robot_ids: Optional[Set[int]] = None):
     si_barrier_cert, si_position_controller, si_to_uni_dyn, uni_to_si_states = helpers
     x_si = uni_to_si_states(x_pose)
+    x_goal_world = separate_goals(x_goal_world, x_si, failed_robot_ids)
     dxi = si_position_controller(x_si, x_goal_world)
+    if failed_robot_ids:
+        for failed_robot_id in failed_robot_ids:
+            dxi[:, failed_robot_id] = 0.0
     dxi = si_barrier_cert(dxi, x_si)
     dxu = si_to_uni_dyn(dxi, x_pose)
     if failed_robot_ids:
         for robot_id in failed_robot_ids:
             dxu[:, robot_id] = 0.0
-    dxu[0, :] = np.clip(dxu[0, :], -r.MAX_LINEAR_VELOCITY, r.MAX_LINEAR_VELOCITY)
+    # Differential-drive robots rotate in place instead of driving backward.
+    dxu[0, :] = np.clip(dxu[0, :], 0.0, r.MAX_LINEAR_VELOCITY)
     dxu[1, :] = np.clip(dxu[1, :], -r.MAX_ANGULAR_VELOCITY, r.MAX_ANGULAR_VELOCITY)
     r.set_velocities(np.arange(N_ROBOTS), dxu)
     r.step()
@@ -305,12 +395,15 @@ def print_movement_report(label: str, step: int, prev_x_si: np.ndarray,
 def add_target_plot(r, targets, found_targets, title: str, step: int, show_figure: bool):
     if not show_figure:
         return None
-    ax = r._axes_handle
+    ax = get_robotarium_axes(r)
+    if ax is None:
+        return None
     coords = np.array([grid_to_world(gx, gy) for gx, gy in targets]).T
     if coords.size:
-        ax.scatter(coords[0], coords[1], s=90, marker="x", c="r", zorder=10)
-    found_plot = ax.scatter([], [], s=90, marker="o", facecolors="none",
-                            edgecolors="g", linewidths=1.5, zorder=11)
+        ax.scatter(coords[0], coords[1], s=280, marker="x", c="r",
+                   linewidths=2.5, zorder=10)
+    found_plot = ax.scatter([], [], s=220, marker="o", facecolors="none",
+                            edgecolors="g", linewidths=2.2, zorder=11)
     ax.set_title(f"{title} | Step: {step} | Targets: {len(found_targets)}/{len(targets)}")
     return found_plot
 
@@ -339,13 +432,13 @@ def add_partition_background(r, zones: np.ndarray, show_figure: bool):
     )
 
 
-def pheromone_to_rgba(pher: np.ndarray, alpha_scale: float = 0.55) -> np.ndarray:
+def pheromone_to_rgba(pher: np.ndarray, alpha_scale: float = 0.75) -> np.ndarray:
     vmax = max(float(np.percentile(pher, 95)), PHER_MIN)
     norm = np.clip(pher / vmax, 0.0, 1.0)
     rgba = np.zeros((pher.shape[0], pher.shape[1], 4), dtype=float)
-    rgba[..., 0] = 1.0
-    rgba[..., 1] = 0.05
-    rgba[..., 2] = 0.62
+    rgba[..., 0] = 0.92
+    rgba[..., 1] = 0.98
+    rgba[..., 2] = 1.0
     rgba[..., 3] = norm * alpha_scale
     return rgba
 

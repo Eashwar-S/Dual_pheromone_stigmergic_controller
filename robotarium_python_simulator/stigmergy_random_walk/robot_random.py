@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -8,7 +8,7 @@ from robotarium_swarm_common import deposit_uniform
 
 @dataclass
 class Robot:
-    """Robotarium-local copy of the biased random-walk robot policy."""
+    """Repulsive-pheromone random walk with forward-motion preference."""
     id: int
     x: int
     y: int
@@ -16,6 +16,7 @@ class Robot:
     collision_radius: int
     local_covered: np.ndarray
     failed: bool = False
+    _last_move: Optional[Tuple[int, int]] = None
 
     def is_clear(self, nx: int, ny: int, all_robots: List["Robot"]) -> bool:
         """
@@ -29,19 +30,16 @@ class Robot:
         return True
 
     def choose_move(self, pher: np.ndarray, rng: np.random.Generator,
-                    all_robots: List["Robot"]) -> Tuple[int, int]:
-        """Choose next move biased away from pheromone and toward uncovered cells."""
+                    all_robots: Optional[List["Robot"]] = None,
+                    heading: Optional[float] = None) -> Tuple[int, int]:
+        """Choose a random forward-biased move away from repulsive pheromone."""
         height, width = pher.shape
 
-        candidates = []
-        if self.y - 1 >= 0:
-            candidates.append((self.x, self.y - 1))
-        if self.y + 1 < height:
-            candidates.append((self.x, self.y + 1))
-        if self.x - 1 >= 0:
-            candidates.append((self.x - 1, self.y))
-        if self.x + 1 < width:
-            candidates.append((self.x + 1, self.y))
+        candidates = [
+            (self.x + dx, self.y + dy)
+            for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0))
+            if 0 <= self.x + dx < width and 0 <= self.y + dy < height
+        ]
 
         if all_robots is not None:
             candidates = [
@@ -52,6 +50,29 @@ class Robot:
 
         if not candidates:
             return self.x, self.y
+
+        # Avoid an immediate 180-degree reversal when another collision-free
+        # direction is available.
+        if self._last_move is not None:
+            reverse = (-self._last_move[0], -self._last_move[1])
+            non_reversing = [
+                (nx, ny)
+                for nx, ny in candidates
+                if (nx - self.x, ny - self.y) != reverse
+            ]
+            if non_reversing:
+                candidates = non_reversing
+
+        heading_vector = None
+        if heading is not None:
+            heading_vector = np.array([np.cos(heading), np.sin(heading)], dtype=float)
+            forward_candidates = []
+            for nx, ny in candidates:
+                move = np.array([nx - self.x, ny - self.y], dtype=float)
+                if float(np.dot(heading_vector, move)) >= -1e-9:
+                    forward_candidates.append((nx, ny))
+            if forward_candidates:
+                candidates = forward_candidates
 
         uncovered_candidates = [
             (nx, ny)
@@ -65,6 +86,10 @@ class Robot:
         for nx, ny in pool:
             p = max(pher[ny, nx], 0.0)
             desirability = 1.0 / (1.0 + p)
+            if heading_vector is not None:
+                move = np.array([nx - self.x, ny - self.y], dtype=float)
+                alignment = float(np.dot(heading_vector, move))
+                desirability *= max(0.05, 1.0 + alignment)
             weights.append(desirability)
 
         w = np.array(weights, dtype=float)
@@ -73,15 +98,18 @@ class Robot:
 
         probs = w / w.sum()
         idx = rng.choice(len(pool), p=probs)
-        return pool[idx]
+        return pool[int(idx)]
 
     def step(self, pher: np.ndarray, rng: np.random.Generator,
-             all_robots: List["Robot"] = None) -> None:
+             all_robots: Optional[List["Robot"]] = None,
+             heading: Optional[float] = None) -> None:
         """Execute one step: choose move and update position."""
         if self.failed:
             return
-        nx, ny = self.choose_move(pher, rng, all_robots)
+        old_x, old_y = self.x, self.y
+        nx, ny = self.choose_move(pher, rng, all_robots, heading)
         self.x, self.y = nx, ny
+        self._last_move = (nx - old_x, ny - old_y)
 
     def deposit_pheromone(self, pher: np.ndarray, amount: float) -> None:
         """Deposit pheromone in neighborhood."""
