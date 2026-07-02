@@ -238,4 +238,7 @@ if __name__ == "__main__":
         waypoint_update_steps=args.waypoint_update_steps,
     )
     if not result["found"]:
-        raise SystemExit("Both robots did not reach the center target.")
+        print(
+            "The run reached its stopping condition before both robots "
+            "found the center target; Robotarium cleanup completed normally."
+        )

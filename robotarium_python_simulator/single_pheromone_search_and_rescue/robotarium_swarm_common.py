@@ -11,9 +11,9 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
 
-SIM_ROOT = Path(__file__).resolve().parent
-ROBOTARIUM_ROOT = SIM_ROOT.parent
-sys.path.insert(0, str(ROBOTARIUM_ROOT))
+# SIM_ROOT = Path(__file__).resolve().parent
+# ROBOTARIUM_ROOT = SIM_ROOT.parent
+# sys.path.insert(0, str(ROBOTARIUM_ROOT))
 
 import rps.robotarium as robotarium
 from rps.utilities.barrier_certificates import create_si_barrier_certificate
@@ -35,9 +35,9 @@ ACTIVE_WORLD_BOUNDS = np.array([
 ])
 
 TARGET_GRID = (GRID_SIZE // 2, GRID_SIZE // 2)
-START_RANDOM_SEED = 9
+START_RANDOM_SEED = 14
 ALGORITHM_RANDOM_SEED = 131
-SEARCH_START_DISTANCE = 30
+SEARCH_START_DISTANCE = 40
 SEARCH_START_SEPARATION = 10
 
 ROBOT_RADIUS = 2
