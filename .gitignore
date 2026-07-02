@@ -209,5 +209,6 @@ __marimo__/
 
 # ignore all .png output files
 output_frames/*
+stigmergy_dual_behavior/output_frames
 src/simulations/output_frames/*
 stig_venv/
