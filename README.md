@@ -1,40 +1,16 @@
 # Swarm Collaboration via Stigmergy
 
-This repository compares centralized swarm search with decentralized search methods across grid sizes, robot counts, target counts, and failure settings.
-
-## Codebase Structure
-
-The three main algorithm folders are:
-
-- `centralized/`: centralized coordination. Robots receive planned coverage regions and follow generated search paths.
-- `random_walk/`: decentralized memoryless random walk baseline. Robots move randomly while respecting collision constraints.
-- `stigmergy_search/`: decentralized stigmergy search with pheromone-guided movement.
-- `stigmergy_convergence/`: rendezvous/convergence experiment. One advertising robot starts at the center target and deposits a non-evaporating attractive spiral pheromone trail while search robots use repulsive search until they detect and follow the attractive field.
-
-Shared support code is organized as:
-
-- `config_experiments.py`: shared experiment parameters, including grid sizes, robot counts, target counts, failure counts, seeds, and horizon calculation.
-- `common/`: shared simulation, geometry, metric, output, utility, and visualization helpers.
-- `stigmergy_common/`: shared pheromone utilities used by stigmergy-based approaches.
-
-Important experiment entry points are:
-
-- `centralized/centralized_parallel_experiment.py`
-- `random_walk/random_walk_parallel_experiment.py`
-- `stigmergy_search/stigmergy_search_efficient_parallel_experiment.py`
-- `stigmergy_convergence/rendezvous_parallel_experiment.py`
-
-The non-parallel `_experiment.py` files remain available for direct single-process runs and visualization support.
+This repository studies swarm search and rescue using centralized control, random baselines, and stigmergy-based coordination. The code is organized by experiment: E1, E2, E4, and E5.
 
 ## Setup
 
-From the repository root, install dependencies:
+Install dependencies from the repository root:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-For an isolated environment:
+Optional virtual environment:
 
 ```bash
 python -m venv .venv
@@ -42,213 +18,196 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Configure Experiments
+## Shared Configuration
 
-Edit `config_experiments.py` to change the experiment settings.
+Most E1/E2 experiment settings live in `config_experiments.py`.
 
-Important parameters include:
+Important parameters:
 
-- `GRID_SIZES`: grid dimensions used in the experiments.
-- `ROBOT_COUNTS`: number of robots for each scenario.
-- `TARGET_COUNTS`: number of targets for each scenario.
-- `FAILURE_COUNTS`: number of robot failures for each scenario.
-- `FAILURE_TIME_MODE`: default failure timing mode for non-parallel runs.
-- `RUNS_PER_SCENARIO`, `BASE_SEED`, `ROBOT_RADIUS`, and `KAPPA`: shared constants used by experiment scripts.
+- `GRID_SIZES`: grid dimensions.
+- `ROBOT_COUNTS`: number of robots.
+- `TARGET_COUNTS`: number of targets.
+- `FAILURE_COUNTS`: number of failed robots.
+- `RUNS_PER_SCENARIO`: repetitions per scenario.
+- `BASE_SEED`: base random seed.
+- `ROBOT_RADIUS`: sensing/deposition radius.
+- `KAPPA`: timeout-horizon scaling factor.
 
-Use E1 for no-failure baseline experiments:
+If `FAILURE_COUNTS` is all zeros, E1 outputs are used. If failures are nonzero, E2 outputs are used.
+
+## Algorithms
+
+These algorithm names are used across experiments:
+
+- **Centralized search** (`centralized/`): a coordinator partitions the grid and assigns planned coverage paths to robots.
+- **Random walk** (`random_walk/`): decentralized baseline where robots move randomly while respecting collision constraints.
+- **Stigmergy search** (`stigmergy_search/`): decentralized search using evaporating repulsive pheromone; robots avoid recently searched areas to reduce redundant coverage.
+- **Stigmergy random walk** (`stigmergy_random_walk/`): ablation of stigmergy search with a more random movement policy.
+- **Rendezvous convergence** (`stigmergy_convergence/`): attractive-pheromone convergence to a known target.
+- **Dual-behavior search and rescue** (`stigmergy_dual_behavior/`): E5 ablations for separating search dispersion from rescue convergence.
+
+## E1: No-Failure Search Benchmark
+
+**Goal:** compare search performance when all robots remain active.
+
+**Folders and algorithms:**
+
+- `centralized/`: centralized search.
+- `random_walk/`: random walk baseline.
+- `stigmergy_search/`: stigmergy search.
+- `stigmergy_random_walk/`: ablation for stigmergy search.
+
+**Configuration:** set all failure counts to zero in `config_experiments.py`.
 
 ```python
 FAILURE_COUNTS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 ```
 
-Use E2 for failure robustness experiments by setting nonzero failure counts:
+**Run commands:**
+
+```bash
+python centralized/centralized_parallel_experiment.py --workers 8
+python random_walk/random_walk_parallel_experiment.py --workers 8
+python stigmergy_search/stigmergy_search_efficient_parallel_experiment.py --workers 8
+python stigmergy_random_walk/stigmergy_random_parallel_experiment.py --workers 8
+```
+
+**Main comparison:** target discovery, coverage, completion time, redundant visits, and success rate without robot failures.
+
+## E2: Failure-Robustness Search Benchmark
+
+**Goal:** compare how the same search algorithms handle robot failures.
+
+**Folders and algorithms:**
+
+- `centralized/`: centralized search.
+- `random_walk/`: random walk baseline.
+- `stigmergy_search/`: stigmergy search.
+- `stigmergy_random_walk/`: ablation for stigmergy search.
+
+**Configuration:** set nonzero failure counts in `config_experiments.py`.
 
 ```python
 FAILURE_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 ```
 
-The output folder is selected automatically. If the first configured scenario has `n_failures == 0`, results go to `E1`; otherwise they go to `E2`.
+The E2 parallel scripts evaluate failure timing modes automatically:
 
-## Run Parallel Experiments
+- `early`
+- `middle`
+- `late`
+- `mixed`
 
-Run commands from the repository root.
-
-Centralized:
+**Run commands:**
 
 ```bash
 python centralized/centralized_parallel_experiment.py --workers 8
-```
-
-Random walk:
-
-```bash
 python random_walk/random_walk_parallel_experiment.py --workers 8
-```
-
-Stigmergy search:
-
-```bash
 python stigmergy_search/stigmergy_search_efficient_parallel_experiment.py --workers 8
+python stigmergy_random_walk/stigmergy_random_parallel_experiment.py --workers 8
 ```
 
-Rendezvous convergence:
+**Main comparison:** post-failure target discovery, post-failure coverage, robustness to failure timing, and final success rate.
+
+## E4: Rendezvous Convergence
+
+**Goal:** test whether search robots can converge to a known target using an attractive pheromone trail.
+
+**Folder:** `stigmergy_convergence/`
+
+**Setup:** one advertising robot starts at the center target and deposits a non-evaporating attractive spiral pheromone. Search robots start away from the target, search with repulsive pheromone, and switch to following when they detect the attractive field.
+
+**Run command:**
 
 ```bash
 python stigmergy_convergence/rendezvous_parallel_experiment.py --workers 8
 ```
 
-If `--workers` is omitted, each script defaults to the detected CPU count.
-
-For E2, the parallel scripts run four failure timing modes automatically:
-
-- `mixed`
-- `early`
-- `middle`
-- `late`
-
-## Visualization
-
-Each algorithm also has a visualization path:
-
-```bash
-python centralized/centralized_experiment.py --visualize
-python random_walk/random_walk_experiment.py --visualize
-python stigmergy_search/stigmergy_search_efficient_experiment.py --visualize
-```
-
-Rendezvous convergence visualization:
+**Visualization:**
 
 ```bash
 python stigmergy_convergence/rendezvous_visualization.py --search-robots 3 --distance-shell 40 --grid-size 100
 ```
 
-`--search-robots` controls how many search robots are spawned. `--distance-shell` requests the Manhattan distance from the target for the initial search robot positions.
+**Main comparison:** convergence time, attractive detection time, distance-to-target curves, and path efficiency.
 
-## Output Storage
+## E5: Dual-Behavior Search-and-Rescue Ablation
 
-Parallel experiment outputs are written under the current working directory. When commands are run from the repository root, the output folders are:
+**Goal:** test whether search-and-rescue needs two distinct pheromone roles: evaporating repulsive search memory and persistent attractive rescue recruitment.
 
-- `experiment_results/E1/` or `experiment_results/E2/` for centralized.
-- `experiment_results_stigmergy/E1/` or `experiment_results_stigmergy/E2/` for random walk.
-- `experiment_results_stigmergy_efficient/E1/` or `experiment_results_stigmergy_efficient/E2/` for stigmergy search.
-- `experiment_results_rendezvous/` for rendezvous convergence.
+**Folder:** `stigmergy_dual_behavior/`
 
-Each E1/E2 folder contains:
+All E5 variants use the same grids, robot counts, distance shells, start seeds, and algorithm seeds for fair comparison. Outputs are stored under `stigmergy_dual_behavior/E5/`.
 
-- `results.xlsx`: scalar run results and grouped summaries.
-- `timeseries_sampled.csv`: graph-ready per-run sampled time-series data.
-- `timeseries_summary.csv`: averaged graph-ready curves by scenario and time sample.
+### E5 Variants
 
-`results.xlsx` contains:
+- **Repulsive-only** (`repulsive_only_parallel_experiment.py`): robots search individually using evaporating repulsive pheromone; no attractive recruitment.
+- **Attractive-only** (`attractive_only_parallel_experiment.py`): robots use attractive/self-reinforcing search behavior; no rescue recruitment mode.
+- **Single evaporative merged field** (`single_evaporative_merged_parallel_experiment.py`): one evaporating field is used for merged search signaling.
+- **Single persistent merged field** (`single_persistent_merged_parallel_experiment.py`): one non-evaporating field is used for merged search signaling.
+- **Sign-flip** (`sign_flip_parallel_experiment.py`): robots follow high search pheromone instead of avoiding it, testing whether repulsive sign is necessary.
+- **STIGSAR / stigmergy search and rescue** (`stigmergy_search_and_rescue_parallel_experiment.py`): full dual behavior. Robots start in search mode; the first robot that finds the target advertises with persistent attractive pheromone while others converge.
 
-- `detailed`: one row per run or simulation.
-- `summary`: grouped averages by algorithm, grid size, robot count, failure count, and failure timing mode.
-
-## Metrics
-
-Core scalar metrics include:
-
-- `n_targets_found`: number of targets discovered by the end of the run.
-- `t_targets`: timestep when all targets are found, or the timeout horizon if not completed.
-- `t_coverage`: timestep when full coverage is reached, or the timeout horizon if not completed.
-- `percent_coverage`: final percentage of the grid covered.
-- `mean_found`: average target discovery fraction over executed timesteps.
-
-Additional graph and robustness metrics include:
-
-- `max_horizon`: timeout horizon for the scenario.
-- `steps_executed`: number of simulated steps before completion or timeout.
-- `final_coverage_cells`: number of grid cells covered by the end of the run.
-- `final_coverage_fraction`: final covered-cell fraction.
-- `final_targets_fraction`: final discovered-target fraction.
-- `coverage_auc_executed`: average coverage fraction over executed timesteps.
-- `target_auc_executed`: average target discovery fraction over executed timesteps.
-- `coverage_auc_horizon_norm`: coverage AUC normalized over the full horizon, padding early-finished runs with final values.
-- `target_auc_horizon_norm`: target discovery AUC normalized over the full horizon, padding early-finished runs with final values.
-- `avg_visits_per_covered_cell`: average number of robot footprint observations for cells that were covered at least once.
-- `extra_visits_per_covered_cell`: average redundant observations beyond the first visit for covered cells.
-- `pct_revisited_cells`: percentage of grid cells observed more than once.
-- `total_cell_observations`: total robot footprint observations across the grid.
-- `success_targets`: `1` if all targets were found before timeout, otherwise `0`.
-- `success_coverage`: `1` if full coverage was reached before timeout, otherwise `0`.
-
-E2-specific fields include:
-
-- `failure_time_mode`: failure timing group, such as `mixed`, `early`, `middle`, or `late`.
-- `failed_robot_ids`: semicolon-separated failed robot IDs.
-- `failure_steps`: semicolon-separated failure timesteps.
-- `first_failure_step`: earliest failure timestep in the run.
-- `last_failure_step`: latest failure timestep in the run.
-- `targets_found_at_first_failure`: number of targets found when the first failure has taken effect.
-- `coverage_fraction_at_first_failure`: coverage fraction when the first failure has taken effect.
-- `post_failure_target_auc`: average target discovery fraction after the first failure.
-- `post_failure_coverage_auc`: average coverage fraction after the first failure.
-
-## Time-Series Format
-
-`timeseries_sampled.csv` stores sampled curves in long format. Each run contributes `201` samples from `time_fraction = 0.0` to `time_fraction = 1.0`.
-
-Important columns include:
-
-- Run identity: `algorithm`, `grid_size`, `n_robots`, `n_targets`, `n_failures`, `failure_time_mode`, `experiment_id`, and `simulation_id`.
-- Time identity: `sample_idx`, `step`, and `time_fraction`.
-- Curve values: `coverage_cells`, `coverage_fraction`, `targets_found`, `target_fraction`, `active_robots`, `avg_visits_per_covered_cell`, and `pct_revisited_cells`.
-
-`timeseries_summary.csv` groups the sampled curves by scenario and time sample. It stores mean, standard deviation, count, and standard error columns for graph creation.
-
-## Rendezvous Convergence Experiment
-
-The rendezvous experiment is designed to measure convergence toward a known target through attractive pheromone following. One advertising robot starts at the target in the center of the grid and moves outward in a spiral while depositing attractive pheromone. Search robots are initialized away from the target, perform the repulsive search behavior, and switch to attractive following when they sense the attractive trail.
-
-The parallel experiment uses:
-
-- Grid sizes: `50` and `100`.
-- Search robot counts: `1`, `2`, and `3`.
-- Requested Manhattan distance shells from the target: `20`, `30`, `40`, and `50`.
-- Repetitions per shell: `10`, using the same spawn positions with different algorithm seeds.
-- Total simulations: `2 * 3 * 4 * 10 = 240`.
-
-Search robot starts are constrained to be at least `20` cells from the target. If an exact requested shell does not have enough valid cells for all search robots, the nearest shell with enough valid cells is used, while `requested_distance_shell` remains recorded for grouping.
-
-Run it from the repository root:
+**Run commands:**
 
 ```bash
-python stigmergy_convergence/rendezvous_parallel_experiment.py --workers 8
+python stigmergy_dual_behavior/repulsive_only_parallel_experiment.py --workers 8
+python stigmergy_dual_behavior/attractive_only_parallel_experiment.py --workers 8
+python stigmergy_dual_behavior/single_evaporative_merged_parallel_experiment.py --workers 8
+python stigmergy_dual_behavior/single_persistent_merged_parallel_experiment.py --workers 8
+python stigmergy_dual_behavior/sign_flip_parallel_experiment.py --workers 8
+python stigmergy_dual_behavior/stigmergy_search_and_rescue_parallel_experiment.py --workers 8
 ```
 
-Outputs are written to `experiment_results_rendezvous/`:
+**Visualization examples:**
 
-- `results.xlsx`: workbook with scalar run summaries.
-- `search_robot_paths.csv`: per-step robot positions for reconstructing paths.
-- `swarm_convergence.csv`: per-step swarm-level convergence curves.
-- `search_robot_metrics.csv`: per-robot convergence metrics.
+```bash
+python stigmergy_dual_behavior/repulsive_only_visualization.py --search-robots 3 --grid-size 100 --distance-shell 50
+python stigmergy_dual_behavior/stigmergy_search_and_rescue_visualization.py --search-robots 3 --grid-size 100 --distance-shell 50
+```
 
-`results.xlsx` contains:
+**Analysis:**
 
-- `detailed`: one row per simulation.
-- `summary`: grouped by `grid_size`, `n_search_robots`, and `requested_distance_shell`; includes `success_rate_by_distance` and average convergence metrics.
-- `robot_metrics`: one row per search robot per simulation.
+```bash
+python stigmergy_dual_behavior/analyze_e5_ablation_results.py
+```
 
-`search_robot_paths.csv` is the path reconstruction table. Important columns are:
+Analysis outputs are written to:
 
-- Identity: `grid_size`, `n_search_robots`, `requested_distance_shell`, `spawn_position_id`, `algorithm_seed`, and `search_robot_id`.
-- Time and state: `step`, `search_x`, `search_y`, `mode`, and `attractive_detected`.
-- Distance curve: `distance_to_target`.
+```text
+stigmergy_dual_behavior/E5/analysis_outputs/
+```
 
-`swarm_convergence.csv` is graph-ready for convergence curves. It stores:
+**Main comparison:** all-robot completion success, first-discovery versus all-found completion, rescue delay, and normalized completion cost.
 
-- `min_distance_to_target_over_time`: closest search robot distance to the target at each step.
-- `mean_distance_to_target_over_time`: average search robot distance to the target at each step.
-- `found`: whether the target has been found by that timestep.
+## Output Files
 
-`search_robot_metrics.csv` stores per-robot metrics:
+Parallel experiment folders typically contain:
 
-- `time_to_attractive_detection`: first timestep when that robot senses attractive pheromone.
-- `time_from_detection_to_target`: steps from first attractive detection to reaching the target.
-- `mode_switch_step`: first timestep when that robot switches from search to follow.
-- `path_efficiency`: initial Manhattan distance divided by actual steps to target.
-- `post_detection_path_efficiency`: distance at detection divided by steps from detection to target.
-- `convergence_rate`: distance decrease per step after attractive detection.
-- `stagnation_count`: number of steps where distance to target did not improve.
-- `post_detection_stagnation_count`: stagnation after attractive detection.
-- `final_distance`: final Manhattan distance to the target if the robot did not find it.
+- `results.xlsx`: scalar run results and grouped summaries.
+- `search_robot_metrics.csv`: per-robot metrics for E4/E5.
+- `search_robot_paths.csv`: per-step robot path data for E4/E5.
+- `swarm_convergence.csv`: per-step swarm convergence data for E4/E5.
+- `timeseries_sampled.csv` and `timeseries_summary.csv`: sampled E1/E2 time-series outputs.
+
+Large E5 CSV/XLSX outputs are tracked with Git LFS when committed.
+
+## Metrics Summary
+
+Common E1/E2 metrics:
+
+- targets found and target success rate.
+- coverage fraction and coverage success rate.
+- completion time and timeout horizon.
+- redundant visits and revisit fraction.
+- post-failure target/coverage metrics for E2.
+
+E4/E5 metrics:
+
+- `first_found`: whether any robot found the target.
+- `all_found`: whether all robots found the target.
+- `steps_to_all_found`: completion time for the team.
+- `rescue_delay`: time between first target discovery and all robots reaching the target.
+- `time_to_attractive_detection`: when a robot first senses attractive pheromone.
+- `final_distance`: final Manhattan distance to target.
+- `normalized_completion_cost`: completion steps divided by shortest initial Manhattan distance.
