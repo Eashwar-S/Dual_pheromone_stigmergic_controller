@@ -207,7 +207,32 @@ marimo/_lsp/
 __marimo__/
 
 
-# ignore all .png output files
+# Generated simulation frames
 output_frames/*
 src/simulations/output_frames/*
 
+# Images and plots
+*.png
+*.PNG
+*.jpg
+*.JPG
+*.jpeg
+*.JPEG
+*.gif
+*.GIF
+*.bmp
+*.BMP
+*.tif
+*.TIF
+*.tiff
+*.TIFF
+*.webp
+*.WEBP
+*.svg
+*.SVG
+*.ico
+*.ICO
+*.heic
+*.HEIC
+*.avif
+*.AVIF

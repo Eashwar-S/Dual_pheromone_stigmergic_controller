@@ -1,0 +1,1583 @@
+{
+  "run_finished_utc": null,
+  "run_started_utc": "2026-06-24T21:16:29.306Z",
+  "samples": [
+    {
+      "coverage": {
+        "covered_area_m2": 0.23,
+        "percent": 3.19,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "name": "idle",
+            "turn_deg": 0.0
+          },
+          "position": {
+            "heading_deg": 0.0,
+            "x": 0.15,
+            "y": 0.15,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "name": "idle",
+            "turn_deg": 0.0
+          },
+          "position": {
+            "heading_deg": -0.18,
+            "x": 2.15,
+            "y": 0.15,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:33.088Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.23,
+        "percent": 3.19,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "collision_avoidance_90_move",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 90.0
+          },
+          "position": {
+            "heading_deg": 0.0,
+            "x": 0.15,
+            "y": 0.15,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": -0.18,
+            "x": 2.15,
+            "y": 0.15,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:33.535Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.23,
+        "percent": 3.19,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "collision_avoidance_90_move",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 90.0
+          },
+          "position": {
+            "heading_deg": 9.76,
+            "x": 0.15,
+            "y": 0.1463,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 7.15,
+            "x": 2.1509,
+            "y": 0.1412,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:33.978Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.23,
+        "percent": 3.19,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "collision_avoidance_90_move",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 90.0
+          },
+          "position": {
+            "heading_deg": 23.0,
+            "x": 0.1494,
+            "y": 0.1495,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 14.89,
+            "x": 2.1535,
+            "y": 0.1471,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:34.420Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.2325,
+        "percent": 3.23,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "collision_avoidance_90_move",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 90.0
+          },
+          "position": {
+            "heading_deg": 35.43,
+            "x": 0.15,
+            "y": 0.1465,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 20.21,
+            "x": 2.158,
+            "y": 0.1399,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:34.860Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.2325,
+        "percent": 3.23,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "collision_avoidance_90_move",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 90.0
+          },
+          "position": {
+            "heading_deg": 48.85,
+            "x": 0.1535,
+            "y": 0.1456,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 23.56,
+            "x": 2.1606,
+            "y": 0.1374,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:35.297Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.2325,
+        "percent": 3.23,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "collision_avoidance_90_move",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 90.0
+          },
+          "position": {
+            "heading_deg": 61.44,
+            "x": 0.1516,
+            "y": 0.15,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 26.33,
+            "x": 2.1684,
+            "y": 0.1373,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:35.738Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.2325,
+        "percent": 3.23,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "collision_avoidance_90_move",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 90.0
+          },
+          "position": {
+            "heading_deg": 70.61,
+            "x": 0.1502,
+            "y": 0.156,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 28.56,
+            "x": 2.1709,
+            "y": 0.1346,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:36.181Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.235,
+        "percent": 3.26,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "collision_avoidance_90_move",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 90.0
+          },
+          "position": {
+            "heading_deg": 77.95,
+            "x": 0.1472,
+            "y": 0.1502,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:36.498Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "straight",
+            "step": 1,
+            "turn_deg": 0.0
+          },
+          "position": {
+            "heading_deg": 28.67,
+            "x": 2.1721,
+            "y": 0.1353,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:36.623Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.235,
+        "percent": 3.26,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "collision_avoidance_90_move",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 90.0
+          },
+          "position": {
+            "heading_deg": 82.14,
+            "x": 0.1507,
+            "y": 0.1477,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:36.498Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "straight",
+            "step": 1,
+            "turn_deg": 0.0
+          },
+          "position": {
+            "heading_deg": 28.67,
+            "x": 2.1723,
+            "y": 0.1351,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:37.058Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.235,
+        "percent": 3.26,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "collision_avoidance_90_move",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 90.0
+          },
+          "position": {
+            "heading_deg": 84.52,
+            "x": 0.1469,
+            "y": 0.1395,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:37.308Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 2,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 28.72,
+            "x": 2.1726,
+            "y": 0.1345,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:37.494Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.235,
+        "percent": 3.26,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "collision_avoidance_90_move",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 90.0
+          },
+          "position": {
+            "heading_deg": 86.91,
+            "x": 0.1462,
+            "y": 0.1403,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:37.308Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 2,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 31.66,
+            "x": 2.1756,
+            "y": 0.1294,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:37.934Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.24,
+        "percent": 3.33,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:33.092Z",
+            "decision_mode": "collision_avoidance_90_move",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 0,
+            "turn_deg": 90.0
+          },
+          "position": {
+            "heading_deg": 88.63,
+            "x": 0.1454,
+            "y": 0.1374,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:37.308Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 2,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 40.93,
+            "x": 2.184,
+            "y": 0.1285,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:38.372Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.24,
+        "percent": 3.33,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 89.28,
+            "x": 0.1467,
+            "y": 0.138,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:37.308Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 2,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 47.83,
+            "x": 2.1815,
+            "y": 0.1255,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:38.824Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.24,
+        "percent": 3.33,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 89.08,
+            "x": 0.1473,
+            "y": 0.1383,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:37.308Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 2,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 52.41,
+            "x": 2.181,
+            "y": 0.1256,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:39.271Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.24,
+        "percent": 3.33,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 80.74,
+            "x": 0.1451,
+            "y": 0.1384,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:37.308Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 2,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 55.25,
+            "x": 2.1823,
+            "y": 0.1217,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:39.726Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.24,
+        "percent": 3.33,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 74.51,
+            "x": 0.1428,
+            "y": 0.1422,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:37.308Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 2,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 57.69,
+            "x": 2.1854,
+            "y": 0.1195,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:40.166Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.24,
+        "percent": 3.33,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 69.06,
+            "x": 0.14,
+            "y": 0.1376,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:37.308Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 2,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 58.81,
+            "x": 2.1871,
+            "y": 0.122,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:40.607Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.24,
+        "percent": 3.33,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 65.76,
+            "x": 0.1413,
+            "y": 0.1484,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:40.685Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 3,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 59.16,
+            "x": 2.1888,
+            "y": 0.1241,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:41.050Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.2425,
+        "percent": 3.37,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 65.13,
+            "x": 0.1389,
+            "y": 0.1455,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:40.685Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 3,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 58.33,
+            "x": 2.1902,
+            "y": 0.1256,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:41.287Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.2425,
+        "percent": 3.37,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 62.69,
+            "x": 0.139,
+            "y": 0.1437,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:40.685Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 3,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 49.91,
+            "x": 2.1885,
+            "y": 0.1259,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:41.735Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.2425,
+        "percent": 3.37,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 61.34,
+            "x": 0.1389,
+            "y": 0.1467,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:40.685Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 3,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 43.41,
+            "x": 2.1915,
+            "y": 0.1258,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:42.179Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.2475,
+        "percent": 3.44,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 61.07,
+            "x": 0.1523,
+            "y": 0.1671,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:40.685Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 3,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 39.48,
+            "x": 2.1893,
+            "y": 0.1267,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:42.621Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.27,
+        "percent": 3.75,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 60.59,
+            "x": 0.175,
+            "y": 0.2033,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:40.685Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 3,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 36.17,
+            "x": 2.1932,
+            "y": 0.1311,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:43.063Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.29,
+        "percent": 4.03,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 60.65,
+            "x": 0.1969,
+            "y": 0.2404,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:40.685Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 3,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 34.03,
+            "x": 2.1962,
+            "y": 0.1345,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:43.503Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.305,
+        "percent": 4.24,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 60.58,
+            "x": 0.218,
+            "y": 0.281,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:40.685Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 3,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 32.14,
+            "x": 2.1965,
+            "y": 0.1337,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:43.956Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.32,
+        "percent": 4.44,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 60.66,
+            "x": 0.2339,
+            "y": 0.3094,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:40.685Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 3,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 31.56,
+            "x": 2.1981,
+            "y": 0.1346,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:44.408Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.335,
+        "percent": 4.65,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:38.748Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 1,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 60.66,
+            "x": 0.2535,
+            "y": 0.345,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:44.455Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 4,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 31.54,
+            "x": 2.198,
+            "y": 0.1336,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:44.861Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.3375,
+        "percent": 4.69,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:45.253Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 2,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 60.63,
+            "x": 0.2598,
+            "y": 0.354,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:44.455Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 4,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 37.78,
+            "x": 2.2016,
+            "y": 0.1302,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:45.315Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.3375,
+        "percent": 4.69,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:45.253Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 2,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 60.63,
+            "x": 0.2604,
+            "y": 0.3544,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:44.455Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 4,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 44.56,
+            "x": 2.1987,
+            "y": 0.1308,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:45.760Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.3425,
+        "percent": 4.76,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:45.253Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 2,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 52.25,
+            "x": 0.2599,
+            "y": 0.3594,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:44.455Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 4,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 49.87,
+            "x": 2.1987,
+            "y": 0.1327,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:46.199Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.345,
+        "percent": 4.79,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:45.253Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 2,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 44.65,
+            "x": 0.2663,
+            "y": 0.3595,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:44.455Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 4,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 53.88,
+            "x": 2.206,
+            "y": 0.136,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:46.636Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.3475,
+        "percent": 4.83,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:45.253Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 2,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 39.72,
+            "x": 0.272,
+            "y": 0.3583,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:44.455Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 4,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 56.29,
+            "x": 2.2064,
+            "y": 0.1323,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:47.075Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.3475,
+        "percent": 4.83,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:45.253Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 2,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 36.57,
+            "x": 0.2656,
+            "y": 0.3571,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:44.455Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 4,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 57.96,
+            "x": 2.2069,
+            "y": 0.1328,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:47.531Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.3475,
+        "percent": 4.83,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:45.253Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 2,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 34.14,
+            "x": 0.2631,
+            "y": 0.3591,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:44.455Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 4,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 59.48,
+            "x": 2.2061,
+            "y": 0.129,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:47.987Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.3575,
+        "percent": 4.97,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:45.253Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 2,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 31.88,
+            "x": 0.2619,
+            "y": 0.3609,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:44.455Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 4,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 60.44,
+            "x": 2.2265,
+            "y": 0.1612,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:48.442Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.375,
+        "percent": 5.21,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:45.253Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 2,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 31.47,
+            "x": 0.2647,
+            "y": 0.3633,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:44.455Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 4,
+            "turn_deg": 30.0
+          },
+          "position": {
+            "heading_deg": 60.85,
+            "x": 2.2451,
+            "y": 0.1949,
+            "z": 0.0
+          }
+        }
+      },
+      "timestamp_utc": "2026-06-24T21:16:48.891Z"
+    },
+    {
+      "coverage": {
+        "covered_area_m2": 0.4025,
+        "percent": 5.59,
+        "total_area_m2": 7.2
+      },
+      "robots": {
+        "robot_1": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:45.253Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "right",
+            "step": 2,
+            "turn_deg": -30.0
+          },
+          "position": {
+            "heading_deg": 30.8,
+            "x": 0.3056,
+            "y": 0.3884,
+            "z": 0.0
+          }
+        },
+        "robot_2": {
+          "action": {
+            "chosen_utc": "2026-06-24T21:16:44.455Z",
+            "decision_mode": "random_walk",
+            "distance_m": 0.25,
+            "name": "left",
+            "step": 4,
+            "turn_deg": 30.0
+          },
+          "position": 
