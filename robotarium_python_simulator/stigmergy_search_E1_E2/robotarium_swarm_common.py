@@ -8,12 +8,12 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
 
-# SIM_ROOT = Path(__file__).resolve().parent
-# PROJECT_ROOT = SIM_ROOT.parent
-# REPO_ROOT = PROJECT_ROOT.parent
-# sys.path.insert(0, str(SIM_ROOT))
-# sys.path.insert(0, str(PROJECT_ROOT))
-# sys.path.insert(0, str(REPO_ROOT))
+SIM_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = SIM_ROOT.parent
+REPO_ROOT = PROJECT_ROOT.parent
+sys.path.insert(0, str(SIM_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(REPO_ROOT))
 
 import rps.robotarium as robotarium
 from rps.utilities.transformations import *
