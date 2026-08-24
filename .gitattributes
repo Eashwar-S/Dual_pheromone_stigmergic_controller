@@ -1,0 +1,4 @@
+*.xlsx filter=lfs diff=lfs merge=lfs -text
+*.npy filter=lfs diff=lfs merge=lfs -text
+simulation/**/*.csv filter=lfs diff=lfs merge=lfs -text
+robomaster/**/*metadata.json filter=lfs diff=lfs merge=lfs -text

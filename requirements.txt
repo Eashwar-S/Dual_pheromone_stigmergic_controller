@@ -2,3 +2,8 @@ numpy
 pandas
 matplotlib
 xlsxwriter
+openpyxl
+cvxopt
+tqdm
+opencv-python
+robomaster
