@@ -105,12 +105,9 @@ python robotarium_dual_pheromone.py --no-show
 
 Run the other E5 Robotarium variants from their matching folders: [repulsive_E5](robotarium/repulsive_E5/), [attractive_E5](robotarium/attractive_E5/), [single_evap_pheromone_search_rescue_E5](robotarium/single_evap_pheromone_search_rescue_E5/), [single_persistent_pheromone_search_rescue_E5](robotarium/single_persistent_pheromone_search_rescue_E5/), and [sign_flip_E5](robotarium/sign_flip_E5/).
 
-The E4 Robotarium convergence demonstration video is shown below and is also available at [robotarium/convergence_video/stig_convergence.mp4](robotarium/convergence_video/stig_convergence.mp4).
+The E4 Robotarium convergence demonstration preview is shown below; click it to open the full MP4 at [robotarium/convergence_video/stig_convergence.mp4](robotarium/convergence_video/stig_convergence.mp4).
 
-<video controls width="720">
-  <source src="robotarium/convergence_video/stig_convergence.mp4" type="video/mp4">
-  Your browser does not support embedded MP4 playback.
-</video>
+[![Robotarium convergence demonstration](robotarium/convergence_video/stig_convergence.gif)](robotarium/convergence_video/stig_convergence.mp4)
 
 ## Running RoboMaster Experiments
 
