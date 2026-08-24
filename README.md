@@ -50,6 +50,8 @@ Run commands from the repository root unless a command changes directories. The 
 
 The E1/E2 simulation scripts import a `config_experiments` module; use the same schema shown in [robotarium/stigmergy_search_E1_E2/config_experiments.py](robotarium/stigmergy_search_E1_E2/config_experiments.py), setting `FAILURE_COUNTS` to all zeros for E1 and to positive failure counts for E2.
 
+For reproducible E1/E2 comparisons, keep the shared base seed fixed at `42`: the parallel scripts build one deterministic failure schedule from `schedule_seed = 42`, use `run_seed = schedule_seed + exp_idx`, and, for stochastic robot policies, use `robot_seed = run_seed * 1000 + sim_idx`. Do not change these formulas between approaches unless all centralized, random-walk, and stigmergy runs are regenerated with the same updated seed rule.
+
 ```bash
 cd simulation/centralized
 python centralized_parallel_experiment.py --workers 4
@@ -115,15 +117,41 @@ Physical RoboMaster experiments are run from [robomaster/scripts](robomaster/scr
 
 ```bash
 cd robomaster/scripts
-python centralized.py
-python centralized_with_failure.py
-python random_walk.py
-python random_walk_failure.py
-python stigmergy_search.py
-python stigmergy_search_failure.py
+python centralized.py --seed 42
+python centralized_with_failure.py --seed 42
+python random_walk.py --seed 42
+python random_walk_failure.py --seed 42
+python stigmergy_search.py --seed 42
+python stigmergy_search_failure.py --seed 42
 ```
 
 Local metadata summaries are in [robomaster/centralized_results](robomaster/centralized_results/), [robomaster/random_walk_results](robomaster/random_walk_results/), [robomaster/stigmergy_results](robomaster/stigmergy_results/), [coverage_analysis_E1.csv](robomaster/coverage_analysis_E1.csv), and [coverage_analysis_E2.csv](robomaster/coverage_analysis_E2.csv).
+
+The RoboMaster scripts default to a wall-clock seed when `--seed` is omitted, so always pass `--seed` for reviewer- or paper-replication runs; each robot then derives its private random stream from that run seed and the robot name.
+
+## Code Availability
+
+The simulator, controller implementation, experiment configurations, random-seed definitions, and plotting/analysis scripts used to generate the reported results are included in this repository and should be archived with a persistent DOI/URL before publication. Replace `PERSISTENT_DOI_OR_URL` with the final repository archive link, for example a Zenodo or institutional archive DOI, in the manuscript code-availability statement; the same code snapshot and algorithm descriptions can be provided to editors and reviewers during peer review.
+
+- Simulator code is in [simulation/common](simulation/common/), the experiment-specific simulation folders under [simulation](simulation/), and the vendored Robotarium simulator package in [robotarium/rps](robotarium/rps/).
+- Controller implementations are in [simulation/centralized](simulation/centralized/), [simulation/random_walk](simulation/random_walk/), [simulation/stigmergy_search](simulation/stigmergy_search/), [simulation/stigmergy_random_walk](simulation/stigmergy_random_walk/), [simulation/stigmergy_convergence](simulation/stigmergy_convergence/), [simulation/stigmergy_dual_behavior](simulation/stigmergy_dual_behavior/), the matching Robotarium experiment folders under [robotarium](robotarium/), and the physical RoboMaster scripts in [robomaster/scripts](robomaster/scripts/).
+- Experiment configurations and random-seed definitions are recorded in [robotarium/centralized_E1_E2/config_experiments.py](robotarium/centralized_E1_E2/config_experiments.py), [robotarium/random_walk_E1_E2/config_experiments.py](robotarium/random_walk_E1_E2/config_experiments.py), [robotarium/stigmergy_search_E1_E2/config_experiments.py](robotarium/stigmergy_search_E1_E2/config_experiments.py), [robotarium/stigmergy_random_walk/config_experiments.py](robotarium/stigmergy_random_walk/config_experiments.py), [robotarium/random_walk_memory/config_experiments.py](robotarium/random_walk_memory/config_experiments.py), [simulation/stigmergy_convergence/rendezvous_parallel_experiment.py](simulation/stigmergy_convergence/rendezvous_parallel_experiment.py), and [simulation/stigmergy_dual_behavior/dual_behavior_core.py](simulation/stigmergy_dual_behavior/dual_behavior_core.py).
+- Plotting and analysis code is in [simulation/common/visualization.py](simulation/common/visualization.py), [simulation/stigmergy_convergence/analyze_rendezvous_results.py](simulation/stigmergy_convergence/analyze_rendezvous_results.py), [simulation/stigmergy_dual_behavior/analyze_e5_ablation_results.py](simulation/stigmergy_dual_behavior/analyze_e5_ablation_results.py), and the `*_visualization.py` scripts in [simulation/stigmergy_convergence](simulation/stigmergy_convergence/) and [simulation/stigmergy_dual_behavior](simulation/stigmergy_dual_behavior/).
+- Generated results are stored in the result folders linked in the E1, E2, E4, and E5 table above, with larger Robotarium and RoboMaster artifacts available through the linked Google Drive folders.
+
+## Random-Seed Consistency
+
+Use the committed seed definitions unchanged when reproducing the reported results. E1/E2 configurations use `BASE_SEED = 42` in each `config_experiments.py` file, and the batch scripts derive deterministic run-level seeds from `schedule_seed = 42`; random-walk and stochastic stigmergy baselines additionally derive per-simulation robot seeds as `robot_seed = run_seed * 1000 + sim_idx`. E4 and E5 derive deterministic start and algorithm seeds from the same base-seed convention, including `BASE_ALGORITHM_SEED = BASE_SEED * 1000` and, for E5 start placement, `BASE_START_SEED = BASE_SEED * 500`. The seed fields are written into detailed outputs where applicable, such as `algorithm_seed`, `start_seed`, `experiment_id`, and `simulation_id`, so regenerated files can be audited against the committed result tables.
+
+For hardware RoboMaster runs, pass an explicit `--seed` on every command; otherwise the scripts use the current wall-clock time and the run is intentionally not bit-for-bit repeatable.
+
+To audit seed definitions before a release, run:
+
+```bash
+Select-String -Path robotarium\*\config_experiments.py,simulation\*\*.py,robomaster\scripts\*.py -Pattern "BASE_SEED|START_RANDOM_SEED|ALGORITHM_RANDOM_SEED|schedule_seed|run_seed|robot_seed|--seed"
+```
+
+Expected fixed seeds for the reported workflow are `BASE_SEED = 42` for batch E1/E2/E4/E5 configurations, visualization seed `RANDOM_SEED = 7` for local demonstration animations, and explicit RoboMaster command-line seeds such as `--seed 42` for physical-run replication.
 
 ## Git LFS and Commit Workflow
 
